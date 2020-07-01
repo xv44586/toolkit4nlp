@@ -80,7 +80,7 @@ class AutoRegressiveDecoder(object):
                         inputs = [i[flag] for i in inputs]  # 删除inputs对应路径
                         output_ids = output_ids[flag]  # 删除output对应路径
                         beam_size = flag.sum()  # 重新计算beamsize
-
+                        output_scores = output_scores[flag]
         # 达到长度后直接输出
         return output_ids[output_scores.argmax()]
 
