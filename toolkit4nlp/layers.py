@@ -200,14 +200,14 @@ class PositionEmbedding(Layer):
 
     def build(self, input_shape):
         super(PositionEmbedding, self).build(input_shape)
-        self.embedding = self.add_weight(name='position_embedding',
-                                         shape=(self.input_dim, self.output_dim),
-                                         initializer=self.initializer)
+        self.embeddings = self.add_weight(name='position_embedding',
+                                          shape=(self.input_dim, self.output_dim),
+                                          initializer=self.initializer)
 
     def call(self, inputs, **kwargs):
         input_shape = K.shape(inputs)
         batch_size, seq_length = input_shape[0], input_shape[1]
-        pos_embedding = self.embedding[:seq_length]
+        pos_embedding = self.embeddings[:seq_length]
         pos_embedding = K.expand_dims(pos_embedding, 0)
         if self.merge_mode != 'add':
             pos_embedding = K.tile(pos_embedding, [batch_size, 1, 1])
@@ -215,6 +215,18 @@ class PositionEmbedding(Layer):
         if self.merge_mode == 'add':
             return inputs + pos_embedding
         return K.concatenate([inputs, pos_embedding], axis=-1)
+
+    def compute_output_shape(self, input_shape):
+        if self.merge_mode == 'add':
+            return input_shape
+
+        return input_shape[:2] + (input_shape[2] + self.output_dim,)
+
+    def get_config(self):
+        base_config = super(PositionEmbedding, self).get_config()
+        base_config.update({'input_dim': self.input_dim, 'output_dim': self.output_dim, 'merge_mode': self.merge_mode,
+                            'initializer': initializers.serialize(self.initializer)})
+        return base_config
 
 
 class FeedForward(Layer):
