@@ -109,7 +109,8 @@ class Transformer(object):
 
     def apply(self, inputs, layer=None, layer_name=None, arguments=None, **kwargs):
         '''
-         记录layer信息方便后续mapping权重服务；重用同名layer
+         记录layer信息方便后续mapping权重服务；重用同名layer;
+         layer(name=layer_name, **kwargs)(inputs, **arguments)
         :param layer_name:
         :param inputs:
         :param layer: 具体layer
