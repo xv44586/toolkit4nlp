@@ -16,8 +16,10 @@ tokenizer = Tokenizer(vocab, do_lower_case=True)
 
 model = build_transformer_model(config, checkpoint_path=ckpt)
 
-tokens, segs = tokenizer.encode('我爱你中国')
-print(model.predict([np.array([tokens])], [np.array([segs])]))
+token_ids, segment_ids = tokenizer.encode(u'我爱你中国')
+
+print('\n ===== predicting =====\n')
+print(model.predict([np.array([token_ids]), np.array([segment_ids])]))
 '''
 [[[-0.44401735 -0.30019525 -0.31233636 ...  0.9529598  -0.4809734
     0.06654366]
