@@ -8,12 +8,12 @@ import os, sys
 from distutils.util import strtobool
 import numpy as np
 
-
 is_tf_keras = strtobool(os.environ.get('TF_KERAS', '0'))
 
 if is_tf_keras:
     import tensorflow.keras as keras
     import tensorflow.keras.backend as K
+
     sys.modules['keras'] = keras
 else:
     import keras
@@ -21,11 +21,18 @@ else:
 
 
 def gelu(x):
-    """基于Tanh近似计算的gelu函数
-    """
-    cdf = 0.5 * (
-            1.0 + K.tanh((np.sqrt(2 / np.pi) * (x + 0.044715 * K.pow(x, 3))))
-    )
+    """Gaussian Error Linear Unit.
+
+  This is a smoother version of the RELU.
+  Original paper: https://arxiv.org/abs/1606.08415
+  Args:
+    x: float Tensor to perform activation.
+
+  Returns:
+    `x` with the GELU activation applied.
+  """
+    cdf = 0.5 * (1.0 + K.tanh(
+        (np.sqrt(2 / np.pi) * (x + 0.044715 * K.pow(x, 3)))))
     return x * cdf
 
 
@@ -56,3 +63,9 @@ def sequence_masking(x, mask, mode=0, axis=1):
         return x * mask
 
     return x - (1 - mask) * 1e12
+
+custom_objects = {
+    'gelu': gelu
+}
+
+keras.utils.get_custom_objects().update(custom_objects)
