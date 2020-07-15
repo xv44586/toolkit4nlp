@@ -9,12 +9,12 @@ import tensorflow as tf
 from toolkit4nlp.backend import K, keras
 from toolkit4nlp.backend import sequence_masking
 from keras.layers import *
-from keras import initializers
+from keras import initializers, layers
 
 
 class MultiHeadAttention(Layer):
     """
-
+    多头注意力机制
     """
 
     def __init__(self, head_nums, head_size, key_size=None, use_bias=True, attention_scale=True,
@@ -126,7 +126,7 @@ class LayerNormalization(Layer):
     x = beta + (x - mean / std) * gamma
     """
 
-    def __init__(self, center, scale, epsilon, **kwargs):
+    def __init__(self, center=True, scale=True, epsilon=None, **kwargs):
         super(LayerNormalization, self).__init__(**kwargs)
         self.center = center
         self.scale = scale
@@ -181,10 +181,47 @@ class TokenAndPositionEmbedding(Layer):
         return tuple(list(input_shape) + [self.embed_dim])
 
 
+class PositionEmbedding(Layer):
+    """
+    将位置Embedding与inputs 进行merge, merge mode : [add, concat].
+    """
+
+    def __init__(self,
+                 input_dim,
+                 output_dim,
+                 merge_mode='add',
+                 initializer='zero',
+                 **kwargs):
+        super(PositionEmbedding, self).__init__(**kwargs)
+        self.input_dim = input_dim
+        self.output_dim = output_dim
+        self.merge_mode = merge_mode
+        self.initializer = initializers.get(initializer)
+
+    def build(self, input_shape):
+        super(PositionEmbedding, self).build(input_shape)
+        self.embedding = self.add_weight(name='position_embedding',
+                                         shape=(self.input_dim, self.output_dim),
+                                         initializer=self.initializer)
+
+    def call(self, inputs, **kwargs):
+        input_shape = K.shape(inputs)
+        batch_size, seq_length = input_shape[0], input_shape[1]
+        pos_embedding = self.embedding[:seq_length]
+        pos_embedding = K.expand_dims(pos_embedding, 0)
+        if self.merge_mode != 'add':
+            pos_embedding = K.tile(pos_embedding, [batch_size, 1, 1])
+
+        if self.merge_mode == 'add':
+            return inputs + pos_embedding
+        return K.concatenate([inputs, pos_embedding], axis=-1)
+
+
 class FeedForward(Layer):
     """
     Dense(units, activation) -> Dense(output_dim)
     """
+
     def __init__(self,
                  units,
                  activation='relu',
@@ -212,3 +249,29 @@ class FeedForward(Layer):
         return x
 
 
+class BiadAdd(Layer):
+    def build(self, input_shape):
+        self.bias = self.add_weight('bias', shape=(input_shape[-1],), initializer='zero', trainable=True)
+
+    def call(self, inputs, **kwargs):
+        return K.bias_add(inputs, self.bias)
+
+
+class Embedding(layers.Embedding):
+    def call(self, inputs, mode='embedding'):
+        """
+        embedding mode: 普通embedding， dense mode: 无bias的Dense，x dot embedding.T
+        :param inputs:
+        :param mode:
+        :return:
+        """
+        self._mode = mode
+        if mode == 'embedding':
+            return super(Embedding, self).call(inputs)
+        return K.dot(inputs, K.transpose(self.embeddings))
+
+    def compute_output_shape(self, input_shape):
+        if self._mode == 'embedding':
+            return super(Embedding, self).compute_output_shape(input_shape)
+
+        return input_shape[:2] + K.shape(self.embeddings)[0]
