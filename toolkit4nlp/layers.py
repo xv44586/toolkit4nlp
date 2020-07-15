@@ -109,6 +109,10 @@ class MultiHeadAttention(Layer):
     def compute_output_shape(self, input_shape):
         return (input_shape[0][0], input_shape[0][1], self.output_dim)
 
+    def compute_mask(self, inputs, mask=None):
+        if mask is not None:
+            return mask[0]
+
     def get_config(self):
         config = super(MultiHeadAttention, self).get_config()
         config.update({'head_nums': self.head_nums,
@@ -154,6 +158,9 @@ class LayerNormalization(Layer):
             output += self.beta
 
         return output
+
+    def compute_mask(self, inputs, mask=None):
+        return mask
 
     def get_config(self):
         base_config = super(LayerNormalization, self).get_config()
@@ -204,7 +211,7 @@ class PositionEmbedding(Layer):
                                           shape=(self.input_dim, self.output_dim),
                                           initializer=self.initializer)
 
-    def call(self, inputs, **kwargs):
+    def call(self, inputs):
         input_shape = K.shape(inputs)
         batch_size, seq_length = input_shape[0], input_shape[1]
         pos_embedding = self.embeddings[:seq_length]
@@ -270,6 +277,19 @@ class BiadAdd(Layer):
 
 
 class Embedding(layers.Embedding):
+
+    def compute_mask(self, inputs, mask=None):
+        """为了适配T5，保证第一个token不被mask
+        """
+        if self._mode == 'embedding':
+            mask = super(Embedding, self).compute_mask(inputs, mask)
+            if mask is not None:
+                mask1 = K.ones_like(mask[:, :1], dtype='bool')
+                mask2 = mask[:, 1:]
+                return K.concatenate([mask1, mask2], 1)
+        else:
+            return mask
+
     def call(self, inputs, mode='embedding'):
         """
         embedding mode: 普通embedding， dense mode: 无bias的Dense，x dot embedding.T
