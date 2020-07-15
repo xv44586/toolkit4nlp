@@ -179,3 +179,36 @@ class TokenAndPositionEmbedding(Layer):
 
     def compute_output_shape(self, input_shape):
         return tuple(list(input_shape) + [self.embed_dim])
+
+
+class FeedForward(Layer):
+    """
+    Dense(units, activation) -> Dense(output_dim)
+    """
+    def __init__(self,
+                 units,
+                 activation='relu',
+                 use_bias=True,
+                 kernel_initializer='glorot_uniform',
+                 **kwargs):
+        super(FeedForward, self).__init__(**kwargs)
+        self.units = units
+        self.activation = activation
+        self.use_bias = use_bias
+        self.kernel_initializer = initializers.get(kernel_initializer)
+
+    def build(self, input_shape):
+        super(FeedForward, self).build(input_shape)
+
+        self.dense_1 = Dense(units=self.units,
+                             activation=self.activation,
+                             use_bias=self.use_bias,
+                             kernel_initializer=self.kernel_initializer)
+        self.dense_2 = Dense(units=input_shape[-1], use_bias=self.use_bias, kernel_initializer=self.kernel_initializer)
+
+    def call(self, inputs, **kwargs):
+        x = self.dense_1(inputs)
+        x = self.dense_2(x)
+        return x
+
+

@@ -26,10 +26,11 @@ x = embedding_layer(inputs)
 xi = x
 x = MultiHeadAttention(head_nums=num_heads, head_size=embed_dim // num_heads)([x, x, x])
 x = Dropout(0.2)(x)
+x = FeedForward(units=64)(x)
 x = Add()([xi, x])
 x = layers.GlobalAveragePooling1D()(x)
 x = layers.Dropout(0.1)(x)
-x = Dense(20, name='my_dense')(x)
+x = Dense(20, activation='gelu', name='my_dense')(x)
 x = layers.Dropout(0.1)(x)
 outputs = layers.Dense(2, activation="softmax")(x)
 
