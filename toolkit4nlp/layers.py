@@ -310,4 +310,4 @@ class Embedding(layers.Embedding):
         if self._mode == 'embedding':
             return super(Embedding, self).compute_output_shape(input_shape)
 
-        return input_shape[:2] + K.shape(self.embeddings)[0]
+        return input_shape[:2] + (K.int_shape(self.embeddings)[0],)
