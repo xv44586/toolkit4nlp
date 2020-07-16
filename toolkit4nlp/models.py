@@ -306,6 +306,10 @@ class BERT(Transformer):
             x = outputs[0]
             x = self.apply(x, Dense, 'MLM-Dense', units=self.embedding_size,
                            activation=self.hidden_act, kernel_initializer=self.initializer)
+            x = self.apply(x,
+                           LayerNormalization,
+                           'MLM-Norm',
+                           )
             # 重用embedding-token layer
             x = self.apply(x, Embedding, 'Embedding-Token', arguments={'mode': 'dense'})
             x = self.apply(x, BiadAdd, 'MLM-Bias')
