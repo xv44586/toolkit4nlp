@@ -297,7 +297,7 @@ class BERT(Transformer):
                            kernel_initializer=self.initializer)
             if self.with_nsp:
                 # Next sentence prediction
-                x = self.apply(x, Dense, 'NSP-Prob', units=2, activation='softmax', kernel_initializer=self.initializer)
+                x = self.apply(x, Dense, 'NSP-Proba', units=2, activation='softmax', kernel_initializer=self.initializer)
 
             outputs.append(x)
 
