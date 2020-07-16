@@ -12,6 +12,13 @@ from keras.layers import *
 from keras import initializers, layers
 
 
+class Layer(keras.layers.Layer):
+    # 所有自定义layer都支持masking
+    def __init__(self, **kwargs):
+        super(Layer, self).__init__(**kwargs)
+        self.supports_masking = True
+
+
 class MultiHeadAttention(Layer):
     """
     多头注意力机制
@@ -83,13 +90,11 @@ class MultiHeadAttention(Layer):
         qw = K.reshape(qw, [-1, K.shape(q)[1], self.head_nums, self.key_size])
         kw = K.reshape(kw, [-1, K.shape(k)[1], self.head_nums, self.key_size])
         vw = K.reshape(vw, [-1, K.shape(v)[1], self.head_nums, self.head_size])
-
         # 计算attention
         # att = tf.einsum('bshk,bqhk->bhsq', qw, kw)
         att = tf.einsum('bjhd,bkhd->bhjk', qw, kw)
         if self.attention_scale:
             att = att / self.key_size ** 0.5
-
         # value mask
         att = sequence_masking(att, v_mask, 'add', -1)
         # attention mask
@@ -97,7 +102,6 @@ class MultiHeadAttention(Layer):
             att = att - (1 - a_mask) * 1e12
 
         att = K.softmax(att)
-
         # output = tf.einsum('bhsq,bqhk->bhsk', att, vw)
         output = tf.einsum('bhjk,bkhd->bjhd', att, vw)
         output = K.reshape(output, (-1, K.shape(output)[1], self.output_dim))

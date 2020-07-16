@@ -31,7 +31,7 @@ class Transformer(object):
                  attentioin_probs_dropout_prob=None,
                  initializer_range=None,
                  embedding_size=None,
-                 seq_length=0,
+                 seq_length=None,
                  attention_mask=None,
                  layers=None,
                  name=None,
@@ -48,7 +48,6 @@ class Transformer(object):
         :param attentioin_probs_dropout_prob:
         :param initializer_range:
         """
-        print('start init...')
         self.vocab_size = vocab_size
         self.hidden_size = hidden_size
         self.num_hidden_layers = num_hidden_layers
@@ -70,7 +69,6 @@ class Transformer(object):
         self.built = False
 
     def build(self, **kwargs):
-        print('start build', kwargs)
         if self.built:
             return
 
@@ -86,7 +84,6 @@ class Transformer(object):
         self.built = True
 
     def call(self, inputs):
-        print('start call')
         # embedding
         outputs = self.apply_embeddings(inputs)
 
@@ -222,6 +219,7 @@ class BERT(Transformer):
         if self.hidden_size != self.embedding_size:
             x = self.apply(x, Dense, 'Embedding-Mapping',
                            units=self.hidden_size, kernel_initializer=self.initializer)
+
         return x
 
     def apply_transformer(self, inputs, idx):
