@@ -54,7 +54,7 @@ def sequence_masking(x, mask, mode=0, axis=1):
     # 形状扩充
     # left
     for _ in range(axis - 1):
-        mask = K.expand_dims(x, 1)
+        mask = K.expand_dims(mask, 1)
     # right
     for _ in range(K.ndim(x) - K.ndim(mask) - axis + 1):
         mask = K.expand_dims(mask, K.ndim(mask))
