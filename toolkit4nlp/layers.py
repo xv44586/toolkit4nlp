@@ -131,9 +131,9 @@ class MultiHeadAttention(Layer):
 class LayerNormalization(Layer):
     """
     [Layer Normalization](https://arxiv.org/pdf/1607.06450.pdf)
-    mean = x.mean()
-    std = sqrt(square(x - mean)) ! 这里与普通归一化时的方差计算不同
-    x = beta + (x - mean / std) * gamma
+    x_mean = mean(x)
+    std = sqrt(mean(square(x - x_mean)) + epsilon)
+    x = beta + (x - x_mean / std) * gamma
     """
 
     def __init__(self, center=True, scale=True, epsilon=None, **kwargs):
