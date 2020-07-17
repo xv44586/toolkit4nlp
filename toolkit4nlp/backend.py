@@ -7,6 +7,7 @@
 import os, sys
 from distutils.util import strtobool
 import numpy as np
+import tensorflow as tf
 
 is_tf_keras = strtobool(os.environ.get('TF_KERAS', '0'))
 
@@ -20,7 +21,7 @@ else:
     import keras.backend as K
 
 
-def gelu(x):
+def gelu_tanh(x):
     """Gaussian Error Linear Unit.
 
   This is a smoother version of the RELU.
@@ -34,6 +35,21 @@ def gelu(x):
     cdf = 0.5 * (1.0 + K.tanh(
         (np.sqrt(2 / np.pi) * (x + 0.044715 * K.pow(x, 3)))))
     return x * cdf
+
+
+def gelu_erf(x):
+    """基于Erf直接计算的gelu函数
+    """
+    return 0.5 * x * (1.0 + tf.math.erf(x / np.sqrt(2.0)))
+
+
+def set_gelu_version(version_str):
+    if version_str not in ['gelu_erf', 'gelu_tanh']:
+        raise ValueError('{} version not supported.'.format(version_str))
+    if version_str == 'gelu_erf':
+        keras.utils.get_custom_objects().update({'gelu': gelu_erf()})
+
+    keras.utils.get_custom_objects().update({'gelu': gelu_tanh()})
 
 
 def sequence_masking(x, mask, mode=0, axis=1):
@@ -64,8 +80,9 @@ def sequence_masking(x, mask, mode=0, axis=1):
 
     return x - (1 - mask) * 1e12
 
+
 custom_objects = {
-    'gelu': gelu
+    'gelu': gelu_erf,
 }
 
 keras.utils.get_custom_objects().update(custom_objects)
