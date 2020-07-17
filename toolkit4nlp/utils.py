@@ -176,3 +176,4 @@ class AutoRegressiveDecoder(object):
         # 达到最大长度任然没有结束的直接添加进结果列表
         result.extend(output_ids)
         return result
+
