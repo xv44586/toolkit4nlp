@@ -6,10 +6,78 @@
 import six
 import unicodedata
 import json
+import re
 
+_open_ = open
 is_py2 = six.PY2
 if not is_py2:
     basestring = str
+
+
+def convert_to_str(text, encoding='utf-8', errors='ignore'):
+    """字符串转换为str格式（假设输入为utf-8格式）
+    """
+    if is_py2:
+        if isinstance(text, unicode):
+            text = text.encode(encoding, errors=errors)
+    else:
+        if isinstance(text, bytes):
+            text = text.decode(encoding, errors=errors)
+    return text
+
+
+def convert_to_unicode(text, encoding='utf-8', errors='ignore'):
+    """字符串转换为unicode格式（假设输入为utf-8格式）
+    """
+    if is_py2:
+        if isinstance(text, str):
+            text = text.decode(encoding, errors=errors)
+    else:
+        if isinstance(text, bytes):
+            text = text.decode(encoding, errors=errors)
+    return text
+
+
+class open:
+    """模仿python自带的open函数，主要是为了同时兼容py2和py3
+    """
+
+    def __init__(self, name, mode='r', encoding=None, errors='ignore'):
+        if is_py2:
+            self.file = _open_(name, mode)
+        else:
+            self.file = _open_(name, mode, encoding=encoding, errors=errors)
+        self.encoding = encoding
+        self.errors = errors
+
+    def __iter__(self):
+        for l in self.file:
+            if self.encoding:
+                l = convert_to_unicode(l, self.encoding, self.errors)
+            yield l
+
+    def read(self):
+        text = self.file.read()
+        if self.encoding:
+            text = convert_to_unicode(text, self.encoding, self.errors)
+        return text
+
+    def write(self, text):
+        if self.encoding:
+            text = convert_to_str(text, self.encoding, self.errors)
+        self.file.write(text)
+
+    def flush(self):
+        self.file.flush()
+
+    def close(self):
+        self.file.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, type, value, tb):
+        self.close()
 
 
 def load_vocab(vocab_path, encoding='utf8', simplified=False, startswith=None):
@@ -58,26 +126,6 @@ def remove_remark(token):
     if token[:2] == '##':
         return token[2:]
     return token
-
-
-def convert_to_unicode(text):
-    """Converts `text` to Unicode (if it's not already), assuming utf-8 input."""
-    if six.PY3:
-        if isinstance(text, str):
-            return text
-        elif isinstance(text, bytes):
-            return text.decode("utf-8", "ignore")
-        else:
-            raise ValueError("Unsupported string type: %s" % (type(text)))
-    elif six.PY2:
-        if isinstance(text, str):
-            return text.decode("utf-8", "ignore")
-        elif isinstance(text, unicode):
-            return text
-        else:
-            raise ValueError("Unsupported string type: %s" % (type(text)))
-    else:
-        raise ValueError("Not running on Python2 or Python 3?")
 
 
 def is_whitespace(char):
@@ -161,8 +209,20 @@ class BasicTokenizer(object):
     def decode(self, tokens):
         raise NotImplementedError
 
-    def truncate_seq(self, first_seq, second_seq=None, maxlen=None):
-        raise NotImplementedError
+    def truncate_seq(self, first_seq, second_seq=None, maxlen=None, pop_index=-1):
+        """按 maxlen 截断两个序列，策略是优先从较长的一个中 pop.(pop_index)"""
+        if second_seq is None:
+            second_seq = []
+        while True:
+            total_length = len(first_seq) + len(second_seq)
+            if total_length <= maxlen:
+                break
+            elif len(first_seq) > len(second_seq):
+                first_seq.pop(pop_index)
+            else:
+                second_seq.pop(pop_index)
+
+        return first_seq, second_seq
 
     def token_to_id(self, token):
         raise NotImplementedError
@@ -183,19 +243,19 @@ class Tokenizer(BasicTokenizer):
     def __init__(self, token_dict, do_lower_case=False, *args, **kwargs):
         super(Tokenizer, self).__init__(*args, **kwargs)
         if isinstance(token_dict, six.string_types):
-            token_dict =load_vocab(token_dict)
-        self.token_dict = token_dict
-        self.do_lower_case = do_lower_case
-        self.inv_token_dict = {v: k for k, v in token_dict.items()}
+            token_dict = load_vocab(token_dict)
+        self._token_dict = token_dict
+        self._do_lower_case = do_lower_case
+        self._inv_token_dict = {v: k for k, v in token_dict.items()}
 
         # update attribute of particular token
-        for token in ['pad','unk','mask', 'start', 'end']:
+        for token in ['pad', 'unk', 'mask', 'start', 'end']:
             token_id = token_dict[getattr(self, '_token_{}'.format(token))]
-            setattr(self, '_token_{}'.format(token), token_id)
+            setattr(self, '_token_{}_id'.format(token), token_id)
 
     def _basic_tokenize(self, text):
         text = convert_to_unicode(text)
-        if self.do_lower_case:
+        if self._do_lower_case:
             text = text.lower()
             """Strips accents from a piece of text."""
             text = unicodedata.normalize("NFD", text)
@@ -205,7 +265,7 @@ class Tokenizer(BasicTokenizer):
         for char in text:
             if ord(char) == 0 or ord(char) == 0xfffd or is_control(char):  # 过滤非法字符
                 continue
-            elif is_punctuation(char) or is_chinese_char(char):  #中文与标点前后加空格切分
+            elif is_punctuation(char) or is_chinese_char(char):  # 中文与标点前后加空格切分
                 spaced_text += ' ' + char + ' '
             elif is_whitespace(char):  # 空格符直接加一个 ' '
                 spaced_text += ' '
@@ -236,7 +296,14 @@ class Tokenizer(BasicTokenizer):
 
         return tokens
 
-    def tokenize(self, text, maxlen=None):
+    def token_to_id(self, token):
+        return self._token_dict.get(token, self._token_unk)
+
+    def id_to_token(self, id_):
+        return self._inv_token_dict.get(id_, self._token_unk_id)
+
+    def _tokenize(self, text):
+        """token text"""
         spaced_text = self._basic_tokenize(text)
         tokens = []
         for text in spaced_text.strip().split():
@@ -244,22 +311,74 @@ class Tokenizer(BasicTokenizer):
 
         return tokens
 
+    def tokenize(self, text, maxlen=None):
+        """token text 并按bert格式拼装结果"""
+        tokens = self._tokenize(text)
+        if self._token_start is not None:
+            tokens.insert(0, self._token_start)
+        if self._token_end is not None:
+            tokens.append(self._token_end)
 
-def convert_to_unicode(text):
-    """Converts `text` to Unicode (if it's not already), assuming utf-8 input."""
-    if six.PY3:
-        if isinstance(text, str):
-            return text
-        elif isinstance(text, bytes):
-            return text.decode("utf-8", "ignore")
+        if maxlen is None:
+            return tokens
+
+        pop_index = int(bool(self._token_end)) + 1
+        tokens, _ = self.truncate_seq(tokens, None, maxlen=maxlen, pop_index=-pop_index)
+        return tokens
+
+    def encode(self, first_text, second_text=None, maxlen=None, pattern='S*E*E'):
+        """
+        输出对应的token_ids 与 segment_ids
+        :param first_text:
+        :param second_text:
+        :param maxlen:
+        :param pattern: S*E*E / S*ES*E ,区别第二个seq是否有start_token
+        :return:
+        """
+        if isinstance(first_text, basestring):
+            first_tokens = self.tokenize(first_text)
         else:
-            raise ValueError("Unsupported string type: %s" % (type(text)))
-    elif six.PY2:
-        if isinstance(text, str):
-            return text.decode("utf-8", "ignore")
-        elif isinstance(text, unicode):
-            return text
+            first_tokens = first_text
+
+        if second_text is None:
+            second_tokens = None
+        elif isinstance(second_text, basestring):
+            start_index = 0
+            if pattern == 'S*E*E':
+                start_index = int(bool(self._token_start)) + 1
+            second_tokens = self.tokenize(second_text)[start_index:]
         else:
-            raise ValueError("Unsupported string type: %s" % (type(text)))
-    else:
-        raise ValueError("Not running on Python2 or Python 3?")
+            second_tokens = second_text
+
+        if maxlen is not None:
+            self.truncate_seq(first_tokens, second_tokens, maxlen, -2)
+
+        first_token_ids = self.tokens_to_ids(first_tokens)
+        first_segment_ids = [0] * len(first_token_ids)
+        second_token_ids = self.tokens_to_ids(second_tokens) if second_tokens else []
+        second_segment_ids = [1] * len(second_token_ids) if second_token_ids else []
+        return first_token_ids + second_token_ids, first_segment_ids + second_segment_ids
+
+    def _is_special_token(self, token):
+        # 是否是带有 [ ] 的特殊字符
+        return bool(token) and token[0] == '[' and token[-1] == ']'
+
+    def decode(self, ids, tokens=None):
+        """转换为可读文本"""
+        tokens = tokens or self.ids_to_tokens(ids)
+        tokens = [token for token in tokens if not self._is_special_token(token)]  # 过滤特殊token
+        text, flat = '', False
+        for i, token in enumerate(tokens):
+            if token[:2] == '##':
+                text += token[2:]
+            elif len(token) == 1 and is_punctuation(token):
+                text += token + ' '
+            elif len(token) == 1 and is_chinese_char(token):
+                text += token
+            elif i > 0 and is_chinese_char([-1]):
+                text += token
+            else:
+                text += ' ' + token
+
+        text = re.sub(' +', ' ', text)
+        return text.strip()
