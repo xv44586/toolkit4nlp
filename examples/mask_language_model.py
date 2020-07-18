@@ -5,7 +5,7 @@
 # @File    : mask_language_model.py
 import numpy as np
 
-from bert4keras.tokenizers import Tokenizer
+from toolkit4nlp.tokenizers import Tokenizer
 
 from toolkit4nlp.models import build_transformer_model
 
