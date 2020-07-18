@@ -10,9 +10,9 @@ from bert4keras.tokenizers import Tokenizer
 from toolkit4nlp.models import build_transformer_model
 
 
-config = 'D:/pretrain/chinese_L-12_H-768_A-12/bert_config.json'
-ckpt = 'D:/pretrain/chinese_L-12_H-768_A-12/bert_model.ckpt'
-vocab = 'D:/pretrain/chinese_L-12_H-768_A-12/vocab.txt'
+config = '/home/mingming.xu/pretrain/NLP/chinese_L-12_H-768_A-12/bert_config.json'
+ckpt = '/home/mingming.xu/pretrain/NLP/chinese_L-12_H-768_A-12/bert_model.ckpt'
+vocab = '/home/mingming.xu/pretrain/NLP/chinese_L-12_H-768_A-12/vocab.txt'
 
 tokenizer = Tokenizer(vocab, do_lower_case=True)
 
