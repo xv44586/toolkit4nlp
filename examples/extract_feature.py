@@ -4,7 +4,7 @@
 # @Email   : mingming.xu@zhaopin.com
 # @File    : extract_feature.py
 from toolkit4nlp.models import build_transformer_model
-from bert4keras.tokenizers import Tokenizer
+from toolkit4nlp.tokenizers import Tokenizer
 import numpy as np
 
 
