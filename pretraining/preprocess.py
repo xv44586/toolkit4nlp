@@ -7,6 +7,7 @@ import numpy as np
 import tensorflow as tf
 from toolkit4nlp.backend import K
 
+
 class TrainingDataset(object):
     def __init__(self, tokenizer, seq_length):
         """
@@ -149,6 +150,7 @@ class TrainingDataSetRoBERTa(TrainingDataset):
     """
     生成Robert模式预训练数据：以词为单位进行mask；15%的概率进行替换；替换时80%替换为 [MASK], 10% 不变，10% 随机替换
     """
+
     def __init__(self, tokenizer, word_seg, mask_rate=0.15, seq_length=512):
         """
 
@@ -224,32 +226,50 @@ class TrainingDataSetRoBERTa(TrainingDataset):
                 'mlm_acc': K.zeros([1])
             }
             return x, y
+
         return TrainingDataset.load_tfrecord(record_names, batch_size, parse_func)
 
 
 if __name__ == "__main__":
-    from toolkit4nlp.tokenizers import  Tokenizer
+    from toolkit4nlp.tokenizers import Tokenizer
     import re
     import json
     import glob
     import json_fast as jieba
-
+    from tqdm import tqdm
 
     jieba.initialize()
+    vocab = '/home/mingming.xu/pretrain/NLP/chinese_L-12_H-768_A-12/vocab.txt'
+    tokenizer = Tokenizer(vocab, do_lower_case=True)
+
+    seq_length = 512
+
 
     def word_seg(text):
         return jieba.lcut(text)
 
-    def get_corp():
+
+    def generate_corp():
         file_names = glob.glob('/home/mingming.xu/datasets/NLP/dureader_robust-dataset/pretraining')
-        corpus = []
+        count, sentences = 0, []
         for fname in file_names:
             with open(fname) as fin:
                 for p in json.load(fin)['data'][0]['paragraph']:
                     para = [qa['question'] for qa in p]
-                    para.append(p['context'])
-                # todo: 分句，组成sentence list
+                    para_text = ' '.join(para)
+                    para_text += ' ' + p['context']
+                    sentence_list = re.findall('.*?[\n.。 ]+', para_text)
+                    sentences.extend(sentence_list)
+                    count += 1
 
-        return corpus
+                    if count > 10:
+                        yield sentences
+                        count, sentences = 0, []
+        if sentences:
+            yield sentences
 
 
+    dataset = TrainingDataSetRoBERTa(tokenizer=tokenizer, word_seg=word_seg, seq_length=seq_length)
+
+    for i in range(10):  # repeate 10 times to make 10 different ways of mask token
+        dataset.process(tqdm(generate_corp()), record_name='../corpus_record/corppus.%i.tfrecord')
