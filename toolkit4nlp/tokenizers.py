@@ -247,6 +247,7 @@ class Tokenizer(BasicTokenizer):
         self._token_dict = token_dict
         self._do_lower_case = do_lower_case
         self._inv_token_dict = {v: k for k, v in token_dict.items()}
+        self._vocab_size = len(token_dict)
 
         # update attribute of particular token
         for token in ['pad', 'unk', 'mask', 'start', 'end']:

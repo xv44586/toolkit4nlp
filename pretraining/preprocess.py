@@ -159,7 +159,7 @@ class TrainingDataSetRoBERTa(TrainingDataset):
         :param mask_rate:
         :param seq_length:
         """
-        super(TrainingDataset, self).__init__(tokenizer, seq_length)
+        super(TrainingDataSetRoBERTa, self).__init__(tokenizer, seq_length)
         self.word_seg = word_seg
         self.mask_rate = mask_rate
 
@@ -235,7 +235,7 @@ if __name__ == "__main__":
     import re
     import json
     import glob
-    import json_fast as jieba
+    import jieba_fast as jieba
     from tqdm import tqdm
 
     jieba.initialize()
