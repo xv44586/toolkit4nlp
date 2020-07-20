@@ -227,3 +227,29 @@ class TrainingDataSetRoBERTa(TrainingDataset):
         return TrainingDataset.load_tfrecord(record_names, batch_size, parse_func)
 
 
+if __name__ == "__main__":
+    from toolkit4nlp.tokenizers import  Tokenizer
+    import re
+    import json
+    import glob
+    import json_fast as jieba
+
+
+    jieba.initialize()
+
+    def word_seg(text):
+        return jieba.lcut(text)
+
+    def get_corp():
+        file_names = glob.glob('/home/mingming.xu/datasets/NLP/dureader_robust-dataset/pretraining')
+        corpus = []
+        for fname in file_names:
+            with open(fname) as fin:
+                for p in json.load(fin)['data'][0]['paragraph']:
+                    para = [qa['question'] for qa in p]
+                    para.append(p['context'])
+                # todo: 分句，组成sentence list
+
+        return corpus
+
+
