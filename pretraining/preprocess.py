@@ -3,11 +3,11 @@
 # @Author  : mingming.xu
 # @Email   : mingming.xu@zhaopin.com
 # @File    : preprocess.py
-
+import numpy as np
 import tensorflow as tf
+from toolkit4nlp.backend import K
 
-
-class TFRecord(object):
+class TrainingDataset(object):
     def __init__(self, tokenizer, seq_length):
         """
 
@@ -16,13 +16,13 @@ class TFRecord(object):
         """
         self.tokenizer = tokenizer
         self.seq_length = seq_length
-        self.token_pad = tokenizer._token_pad
-        self.token_start = tokenizer._token_start
-        self.token_sep = tokenizer._token_end
-        self.token_mask = tokenizer._token_mask
+        self.token_pad_id = tokenizer._token_pad_id
+        self.token_start_id = tokenizer._token_start_id
+        self.token_sep_id = tokenizer._token_end_id
+        self.token_mask_id = tokenizer._token_mask_id
         self.vocab_size = tokenizer._vocab_size
 
-    def process(self, corpus, record_name, workers=8):
+    def process(self, corpus, record_name):
         """将语料（corpus）处理为tfrecord格式，并写入 record_name"""
         writer = tf.io.TFRecordWriter(record_name)
         instances = self.paragraph_process(corpus)
@@ -30,7 +30,11 @@ class TFRecord(object):
         for instance_serialized in instances_serialized:
             writer.write(instance_serialized)
 
-    def paragraph_process(self, corpus, starts_tokens, ends_tokens, paddings_tokens):
+    def get_start_end_padding_tokens(self):
+        """get start/end/padding tokens for instance"""
+        raise NotImplementedError
+
+    def paragraph_process(self, corpus):
         """
         将句子不断的塞进一个instance里，直到长度即将超出seq_length
         :param corpus: sentence list构成的paragraph
@@ -39,6 +43,7 @@ class TFRecord(object):
         :param paddings_tokens:  每个序列padding_token
         :return: instances
         """
+        starts_tokens, ends_tokens, paddings_tokens = self.get_start_end_padding_tokens()
         instances, instance = [], [starts_tokens[i] for i in starts_tokens]
 
         for sentence in corpus:
@@ -72,14 +77,14 @@ class TFRecord(object):
 
         return instances
 
-    def padding(self, seq_tokens, pad_token=None):
+    def padding(self, seq_tokens, padding_value=None):
         """对单个token序列进行padding"""
-        if pad_token is None:
-            pad_token = self.token_pad
+        if padding_value is None:
+            padding_value = self.token_pad_id
 
         seq_tokens = seq_tokens[: self.seq_length]
         padding_length = self.seq_length - len(seq_tokens)
-        return seq_tokens + [pad_token] * padding_length
+        return seq_tokens + [padding_value] * padding_length
 
     def sentence_process(self, sentence):
         """根据任务对句子进行处理"""
@@ -138,3 +143,87 @@ class TFRecord(object):
         dataset.shuffle()  # shuffle
         dataset.batch(batch_size)  # batch
         return dataset
+
+
+class TrainingDataSetRoBERTa(TrainingDataset):
+    """
+    生成Robert模式预训练数据：以词为单位进行mask；15%的概率进行替换；替换时80%替换为 [MASK], 10% 不变，10% 随机替换
+    """
+    def __init__(self, tokenizer, word_seg, mask_rate=0.15, seq_length=512):
+        """
+
+        :param tokenizer:
+        :param word_seg: 分词函数
+        :param mask_rate:
+        :param seq_length:
+        """
+        super(TrainingDataset, self).__init__(tokenizer, seq_length)
+        self.word_seg = word_seg
+        self.mask_rate = mask_rate
+
+    def get_instance_keys(self):
+        return ['token_ids', 'mask_ids']
+
+    def get_start_end_padding_tokens(self):
+        starts = [self.token_cls_id, 0]
+        ends = [self.token_sep_id, 0]
+        paddings = [self.token_pad_id, 0]
+        return starts, ends, paddings
+
+    def sentence_process(self, sentence):
+        """"""
+        words = self.word_seg(sentence)
+        probs = np.random.random(len(words))
+
+        sentence_token_ids, sentence_mask_ids = [], []
+        for word, prob in zip(words, probs):
+            tokens = self.tokenizer.tokenize(words)[1:-1]
+            token_ids = self.tokenizer.tokens_to_ids(tokens)
+            sentence_token_ids.extend(token_ids)
+
+            if prob < self.mask_rate:
+                # token_id加1，让unmask-id为0
+                mask_ids = [self.mask_token_process(token_id) + 1 for token_id in token_ids]
+            else:
+                mask_ids = [0] * len(token_ids)
+            sentence_mask_ids.extend(mask_ids)
+
+        return [sentence_token_ids, sentence_mask_ids]
+
+    def mask_token_process(self, token_id):
+        """处理mask token ids，其中80%概率替换为 [MASK], 10% 概率不变，10% 概率随机替换"""
+        prob = np.random.random()
+        if prob < 0.8:
+            return self.token_mask_id
+        elif prob < 0.9:
+            return token_id
+        return np.random.randint(0, self.vocab_size)
+
+    @staticmethod
+    def load_tfrecord(record_names, seq_length, batch_size):
+        def parse_func(serialized_record):
+            feature_description = {
+                'token_ids': tf.io.FixedLenSequenceFeature([seq_length], tf.int64),
+                'mask_ids': tf.io.FixedLenSequenceFeature([seq_length], tf.int64)
+            }
+            features = tf.io.parse_single_example(serialized_record, feature_description)
+            token_ids = features['token_ids']
+            mask_ids = features['mask_ids']
+            segment_ids = K.zeros_like(token_ids, dtype='int64')
+            is_masked = K.not_equal(mask_ids, 0)
+            masked_token_ids = K.switch(mask_ids, mask_ids - 1, token_ids)  # 之前让位给unmask_id一位，现在减1回归
+
+            x = {
+                'Input-Token': masked_token_ids,
+                'Input-Segment': segment_ids,
+                'token_ids': token_ids,
+                'is_masked': K.cast(is_masked, K.floatx())
+            }
+            y = {
+                'mlm_loss': K.zeros([1]),
+                'mlm_acc': K.zeros([1])
+            }
+            return x, y
+        return TrainingDataset.load_tfrecord(record_names, batch_size, parse_func)
+
+
