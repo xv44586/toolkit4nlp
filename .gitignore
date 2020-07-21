@@ -22,3 +22,5 @@ dist/
 
 # Other
 *.DS_Store
+saved_model/
+corpus_record/
