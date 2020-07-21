@@ -298,10 +298,10 @@ class Tokenizer(BasicTokenizer):
         return tokens
 
     def token_to_id(self, token):
-        return self._token_dict.get(token, self._token_unk)
+        return self._token_dict.get(token, self._token_unk_id)
 
     def id_to_token(self, id_):
-        return self._inv_token_dict.get(id_, self._token_unk_id)
+        return self._inv_token_dict.get(id_, self._token_unk)
 
     def _tokenize(self, text):
         """token text"""
