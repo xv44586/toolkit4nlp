@@ -18,11 +18,10 @@ class TrainingDataset(object):
         self.tokenizer = tokenizer
         self.seq_length = seq_length
         self.token_pad_id = tokenizer._token_pad_id
-        self.token_start_id = tokenizer._token_start_id
+        self.token_cls_id = tokenizer._token_start_id
         self.token_sep_id = tokenizer._token_end_id
         self.token_mask_id = tokenizer._token_mask_id
         self.vocab_size = tokenizer._vocab_size
-
     def process(self, corpus, record_name):
         """将语料（corpus）处理为tfrecord格式，并写入 record_name"""
         writer = tf.io.TFRecordWriter(record_name)
@@ -44,8 +43,9 @@ class TrainingDataset(object):
         :param paddings_tokens:  每个序列padding_token
         :return: instances
         """
+        
         starts_tokens, ends_tokens, paddings_tokens = self.get_start_end_padding_tokens()
-        instances, instance = [], [starts_tokens[i] for i in starts_tokens]
+        instances, instance = [], [[i] for i in starts_tokens]
 
         for sentence in corpus:
             sentence_tokens = self.sentence_process(sentence)
@@ -62,7 +62,7 @@ class TrainingDataset(object):
 
                 instances.append(one_instance)  # 加入instances
                 # update new instance
-                instance = [starts_tokens[i] for i in starts_tokens]
+                instance = [[i] for i in starts_tokens]
 
             # append sentence tokens
             for tokens, last_tokens in zip(instance, sentence_tokens):
@@ -93,7 +93,7 @@ class TrainingDataset(object):
 
     def _int64_feature(self, value):
         """Returns an int64_list from a bool / enum / int / uint."""
-        return tf.train.Feature(int64_list=tf.train.Int64List(value=[value]))
+        return tf.train.Feature(int64_list=tf.train.Int64List(value=value))
 
     def _bytes_feature(self, value):
         """Returns a bytes_list from a string / byte."""
@@ -120,7 +120,7 @@ class TrainingDataset(object):
         instance_keys = self.get_instance_keys()
         for instance in instances:
             features = {k: self._int64_feature(v) for k, v in zip(instance_keys, instance)}
-            tf_features = tf.train.Feature(feature=features)
+            tf_features = tf.train.Features(feature=features)
             tf_example = tf.train.Example(features=tf_features)
             serialized = tf_example.SerializeToString()
             instance_serialized.append(serialized)
@@ -139,9 +139,9 @@ class TrainingDataset(object):
             record_names = [record_names]
 
         dataset = tf.data.TFRecordDataset(record_names)  # load
-        dataset.map(parse_func)  # pars
+        dataset = dataset.map(parse_func)  # pars
         dataset.repeat()  # repeat
-        dataset.shuffle()  # shuffle
+        dataset.shuffle(batch_size * 1000)  # shuffle
         dataset.batch(batch_size)  # batch
         return dataset
 
@@ -179,7 +179,7 @@ class TrainingDataSetRoBERTa(TrainingDataset):
 
         sentence_token_ids, sentence_mask_ids = [], []
         for word, prob in zip(words, probs):
-            tokens = self.tokenizer.tokenize(words)[1:-1]
+            tokens = self.tokenizer.tokenize(word)[1:-1]
             token_ids = self.tokenizer.tokens_to_ids(tokens)
             sentence_token_ids.extend(token_ids)
 
@@ -205,8 +205,8 @@ class TrainingDataSetRoBERTa(TrainingDataset):
     def load_tfrecord(record_names, seq_length, batch_size):
         def parse_func(serialized_record):
             feature_description = {
-                'token_ids': tf.io.FixedLenSequenceFeature([seq_length], tf.int64),
-                'mask_ids': tf.io.FixedLenSequenceFeature([seq_length], tf.int64)
+                'token_ids': tf.io.FixedLenFeature([seq_length], tf.int64),
+                'mask_ids': tf.io.FixedLenFeature([seq_length], tf.int64)
             }
             features = tf.io.parse_single_example(serialized_record, feature_description)
             token_ids = features['token_ids']
@@ -250,12 +250,12 @@ if __name__ == "__main__":
 
 
     def generate_corp():
-        file_names = glob.glob('/home/mingming.xu/datasets/NLP/dureader_robust-dataset/pretraining')
+        file_names = glob.glob('/home/mingming.xu/datasets/NLP/qa/dureader_robust-data/pretraining/*')
         count, sentences = 0, []
         for fname in file_names:
             with open(fname) as fin:
-                for p in json.load(fin)['data'][0]['paragraph']:
-                    para = [qa['question'] for qa in p]
+                for p in json.load(fin)['data'][0]['paragraphs']:
+                    para = [qa['question'] for qa in p['qas']]
                     para_text = ' '.join(para)
                     para_text += ' ' + p['context']
                     sentence_list = re.findall('.*?[\n.。 ]+', para_text)
@@ -270,6 +270,6 @@ if __name__ == "__main__":
 
 
     dataset = TrainingDataSetRoBERTa(tokenizer=tokenizer, word_seg=word_seg, seq_length=seq_length)
-
     for i in range(10):  # repeate 10 times to make 10 different ways of mask token
-        dataset.process(tqdm(generate_corp()), record_name='../corpus_record/corppus.%i.tfrecord')
+        for corp in tqdm(generate_corp()):
+            dataset.process(corp, record_name='../corpus_record/corppus.%i.tfrecord' %i)
