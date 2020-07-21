@@ -140,9 +140,9 @@ class TrainingDataset(object):
 
         dataset = tf.data.TFRecordDataset(record_names)  # load
         dataset = dataset.map(parse_func)  # pars
-        dataset.repeat()  # repeat
-        dataset.shuffle(batch_size * 1000)  # shuffle
-        dataset.batch(batch_size)  # batch
+        dataset = dataset.repeat()  # repeat
+        dataset = dataset.shuffle(batch_size * 1000)  # shuffle
+        dataset = dataset.batch(batch_size)  # batch
         return dataset
 
 
@@ -222,8 +222,8 @@ class TrainingDataSetRoBERTa(TrainingDataset):
                 'is_masked': K.cast(is_masked, K.floatx())
             }
             y = {
-                'mlm_loss': K.zeros([1]),
-                'mlm_acc': K.zeros([1])
+                'mlm_loss': K.zeros_like([1], tf.float32),
+                'mlm_acc': K.zeros_like([1], tf.float32)
             }
             return x, y
 
