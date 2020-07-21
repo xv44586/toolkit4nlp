@@ -10,12 +10,12 @@ os.environ['TF_KERAS'] = '1'  # 必须使用tf.keras
 import glob
 
 import tensorflow as tf
-
-from toolkit4nlp.models import Model, build_transformer_model
-from toolkit4nlp.tokenizers import Tokenizer
 from toolkit4nlp.backend import K, keras
+from toolkit4nlp.models import  build_transformer_model
+from keras.models import Model
+from toolkit4nlp.tokenizers import Tokenizer
 from toolkit4nlp.layers import Input, Lambda
-from .preprocess import TrainingDataSetRoBERTa
+from preprocess import TrainingDataSetRoBERTa
 
 floatx = K.floatx()
 
@@ -28,7 +28,7 @@ model_save_path = '../saved_model/bert_model.ckpt'
 file_names = glob.glob('../corpus_record/*')
 
 seq_length = 512
-batch_size = 32
+batch_size = 8
 learning_rate = 1e-5
 epochs = 5
 steps_per_epoch = 100
