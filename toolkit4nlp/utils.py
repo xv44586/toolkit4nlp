@@ -177,3 +177,17 @@ class AutoRegressiveDecoder(object):
         result.extend(output_ids)
         return result
 
+
+def insert_arguments(**arguments):
+    """类的方法上插入一个带有默认值的参数"""
+    def decorator(func):
+        def new_func(self, *args, **kwargs):
+            for k, v in arguments.items():
+                if k in kwargs:
+                    v = kwargs.pop(k)  # 用户自定义则覆盖默认值
+                setattr(self, k, v)
+            return func(self, *args, **kwargs)
+
+        return new_func
+
+    return decorator

@@ -7,6 +7,7 @@ import numpy as np
 
 import tensorflow as tf
 from toolkit4nlp.backend import keras, K
+from toolkit4nlp.utils import *
 
 
 class Adam(keras.optimizers.Optimizer):
@@ -28,6 +29,7 @@ class Adam(keras.optimizers.Optimizer):
            https://openreview.net/forum?id=ryQu7f-RZ)
 
     '''
+
     def __init__(self, learning_rate=0.001, beta_1=0.9, beta_2=0.99, epsilon=1e-6, bias_correct=True, **kwargs):
         kwargs['name'] = kwargs.get('name', Adam)
         self.learning_rate = learning_rate
@@ -87,3 +89,56 @@ class Adam(keras.optimizers.Optimizer):
         }
         basic_config = super(Adam, self).get_config()
         return dict(list(basic_config.items()) + list(config.items()))
+
+
+def extend_with_gradient_accumulation(BaseOptimizer):
+    class NewOptimizer(BaseOptimizer):
+        @insert_arguments(grad_accum_steps=2)
+        def __init__(self, *args, **kwargs):
+            super(NewOptimizer, self).__init__(*args, **kwargs)
+
+        def _create_slots(self, var_list):
+            super(NewOptimizer, self)._create_slots(var_list)
+            for var in var_list:
+                self.add_slot(var, 'gradient_accumulation')
+
+        def _resource_apply(self, grad, var, indices=None):
+            """interation % acc_steps==0 then update else accumulate
+               思路是先判断是否累计了 acc_steps，如果没有，则update时保持保持原样，
+               并累计梯度，否则，更新梯度并将累计的梯度置零
+            """
+            #  是否更新
+            cond = K.equal(self.iterations % self.grad_accum_steps, 0)
+            #  获取梯度累计量
+            gradient_accumulation = self.get_slot(var, 'gradient_accumulation')
+
+            # 获取平均梯度
+            gradient_t = gradient_accumulation / self.grad_accum_steps
+
+            old_update = K.update
+
+            # 根据条件判断是否真的更新
+            def new_update(x, new_x):
+                new_x = K.switch(cond, new_x, x)
+                return old_update(x, new_x)
+
+            K.update = new_update
+            op = super(NewOptimizer, self)._resource_apply(gradient_t, var)
+            K.update = old_update
+
+            # 根据条件判断是否需要置零
+            with tf.control_dependencies([op]):
+                gradient_t = K.switch(cond, K.zeros_like(gradient_accumulation), gradient_accumulation)
+                with tf.control_dependencies([K.update(gradient_accumulation, gradient_t)]):
+                    if indices is None:
+                        K.update(gradient_accumulation, gradient_accumulation + grad)
+                    else:
+                        self._resource_scatter_add(gradient_accumulation, indices, grad)
+            return gradient_t
+
+        def get_config(self):
+            config = super(NewOptimizer, self).get_config()
+            config.update({'grad_accum_steps': self.grad_accum_steps})
+            return config
+
+    return NewOptimizer
