@@ -3,9 +3,11 @@
 # @Author  : mingming.xu
 # @Email   : mingming.xu@zhaopin.com
 # @File    : optimizers.py
-import numpy as np
+import re
 
+import numpy as np
 import tensorflow as tf
+
 from toolkit4nlp.backend import keras, K
 from toolkit4nlp.utils import *
 
@@ -104,8 +106,8 @@ def extend_with_gradient_accumulation(BaseOptimizer):
 
         def _resource_apply(self, grad, var, indices=None):
             """interation % acc_steps==0 then update else accumulate
-               思路是先判断是否累计了 acc_steps，如果没有，则update时保持保持原样，
-               并累计梯度，否则，更新梯度并将累计的梯度置零
+               思路是先判断是否累计了 acc_steps，如果没有，则update时保持原样，
+               并累计当前梯度，否则，更新梯度并将累计的梯度置零
             """
             #  是否更新
             cond = K.equal(self.iterations % self.grad_accum_steps, 0)
@@ -139,6 +141,48 @@ def extend_with_gradient_accumulation(BaseOptimizer):
         def get_config(self):
             config = super(NewOptimizer, self).get_config()
             config.update({'grad_accum_steps': self.grad_accum_steps})
+            return config
+
+    return NewOptimizer
+
+
+def extend_with_wight_decay(BaseOptimizer):
+    """增加权重衰减"""
+
+    class NewOptimizer(BaseOptimizer):
+        @insert_arguments(weight_decay_rate=0.01, exclude_from_weight_decay=[])
+        def __init__(self, *args, **kwargs):
+            super(NewOptimizer, self).__init__(*args, **kwargs)
+
+        def _resource_apply(self, grad, var, indices=None):
+            old_update = K.update
+
+            def new_update(x, new_x):
+                if x is var and self._do_use_weight_decay(x):
+                    lr_t = self._decayed_lr(x.dtype.base_dtype)
+                    new_x = new_x - lr_t * self.weight_decay_rate * x
+                return old_update(x, new_x)
+
+            K.update = new_update
+            op = super(NewOptimizer, self)._resource_apply(grad, var, indices)
+            K.update = old_update
+            return op
+
+        def _do_use_weight_decay(self, param):
+            """Whether to use L2 weight decay for `param_name`."""
+            param_name = param.name
+            if not self.weight_decay_rate:
+                return False
+            if self.exclude_from_weight_decay:
+                for r in self.exclude_from_weight_decay:
+                    if re.search(r, param_name) is not None:
+                        return False
+            return True
+
+        def get_config(self):
+            config = super(NewOptimizer, self).get_config()
+            config.update({'weight_decay_rate': self.weight_decay_rate,
+                           'exclude_from_weight_decay': self.exclude_from_weight_decay})
             return config
 
     return NewOptimizer
