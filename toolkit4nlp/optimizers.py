@@ -93,6 +93,19 @@ class Adam(keras.optimizers.Optimizer):
         return dict(list(basic_config.items()) + list(config.items()))
 
 
+def export_to_custom_objects(extend_with_func):
+    def new_extend_with_func(BaseOptimizer, name=None):
+        NewOptimizer = extend_with_func(BaseOptimizer)
+        if name:
+            NewOptimizer.__name__ = name
+        name = NewOptimizer.__name__
+        keras.utils.get_custom_objects()[name] = NewOptimizer
+        return NewOptimizer
+
+    return new_extend_with_func
+
+
+@export_to_custom_objects
 def extend_with_gradient_accumulation(BaseOptimizer):
     class NewOptimizer(BaseOptimizer):
         @insert_arguments(grad_accum_steps=2)
@@ -146,6 +159,7 @@ def extend_with_gradient_accumulation(BaseOptimizer):
     return NewOptimizer
 
 
+@export_to_custom_objects
 def extend_with_wight_decay(BaseOptimizer):
     """增加权重衰减"""
 
