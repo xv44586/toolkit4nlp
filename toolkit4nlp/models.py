@@ -157,6 +157,24 @@ class Transformer(object):
 
         K.batch_set_value(weights_values_pairs)
 
+    def create_variable(self, name, value):
+        return tf.Variable(name=name, initial_value=value)
+
+    def save_weights_as_checkpoint(self, checkpoint_path, mapping=None):
+        mapping = mapping or self.variable_mapping()
+        mapping = {k: v for k, v in mapping.items() if k in self.layers}
+
+        with tf.Graph().as_default():
+            for layer_name, variables in mapping.items():
+                layer = self.layers[layer_name]
+                weights = K.batch_get_value(layer.trainable_weights)
+                for variable, weight in zip(variables, weights):
+                    self.create_variable(variable, weight)
+            with tf.Session() as sess:
+                sess.run(tf.global_variable_initialzer())
+                saver = tf.train.Saver()
+                saver.save(sess, checkpoint_path, write_meta_graph=False)
+
 
 class BERT(Transformer):
     """
@@ -297,7 +315,8 @@ class BERT(Transformer):
                            kernel_initializer=self.initializer)
             if self.with_nsp:
                 # Next sentence prediction
-                x = self.apply(x, Dense, 'NSP-Proba', units=2, activation='softmax', kernel_initializer=self.initializer)
+                x = self.apply(x, Dense, 'NSP-Proba', units=2, activation='softmax',
+                               kernel_initializer=self.initializer)
 
             outputs.append(x)
 
