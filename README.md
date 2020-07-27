@@ -4,7 +4,8 @@
  为了方便自己学习与理解一些东西，实现一些自己的想法
 
 ## Update info:
-  - <string>2020.07.18</strong>  完成了tokenizer， 用法：
+  - <stong> 2020.7.27 </stong>strong> 完成 pretraining，用法参照 pretraining/README.md
+  - <strong>2020.07.18</strong>  完成了tokenizer， 用法：
   ```python
 from toolkit4nlp.tokenizers import Tokenizer
 vocab = ''
