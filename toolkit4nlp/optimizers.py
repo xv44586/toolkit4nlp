@@ -200,3 +200,59 @@ def extend_with_wight_decay(BaseOptimizer):
             return config
 
     return NewOptimizer
+
+
+@export_to_custom_objects
+def extend_with_piecewise_linear_lr(BaseOptimizer):
+    """
+    分段线性学习率，使用场景如 warmup
+    """
+
+    class NewOptimzer(BaseOptimizer):
+        """
+        schedule 是一个{ point: value} 的字典，如 {10: 1, 20: 0.5}代表从 0 到 10 步 lr 从 0 线性增加到 100% ，
+        然后从 10 到 20 线性降低到 50%，之后一直保持 50% 不变
+        """
+
+        @insert_arguments(lr_schedule={0: 1})
+        def __init__(self, *args, **kwargs):
+            super(NewOptimzer, self).__init__(*args, **kwargs)
+            self.lr_schedule = {int(t): v for t, v in self.lr_schedule.items()}
+
+        def _piecewise_lr(self):
+            global_steps = self.iterations
+            schedule = sorted(self.lr_schedule.items())
+            if schedule[0][0] != 0:
+                schedule = [(0, 0.0)] + schedule  # 增加起点
+
+            v = K.cast(schedule[0][1], K.floatx())
+            p = K.cast(global_steps, K.floatx())
+
+            for i in range(len(schedule)):
+                p_begin = schedule[i][0]
+                v_begin = v
+                if i != len(schedule) - 1:
+                    point_range = schedule[i + 1][0] - schedule[i][0]
+                    value_range = schedule[i + 1][1] - schedule[i][1]
+                    rate = 1.0 * value_range / point_range
+                    v = schedule[i][1] + rate * (p - p_begin)
+                else:
+                    v = K.cast(schedule[i][1], K.floatx())
+
+                v = K.switch(p > p_begin, v, v_begin)
+            return v
+
+        def _decayed_lr(self, var_dtypes):
+            """重写获取decayed learning rate 方法"""
+
+            lr_t = super(NewOptimzer, self)._decayed_lr(var_dtypes)
+            lr_rate = self._piecewise_lr()
+            K.print_tensor(lr_t)
+            return lr_t * K.cast(lr_rate, var_dtypes)
+
+        def get_config(self):
+            config = super(NewOptimzer, self).get_config()
+            config.update({'lr_schedule': self.lr_schedule})
+            return config
+
+    return NewOptimzer
