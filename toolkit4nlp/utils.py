@@ -6,6 +6,7 @@
 import numpy as np
 from abc import abstractmethod
 
+
 def softmax(x, axis=-1):
     """numpy版softmax
     """
@@ -180,6 +181,7 @@ class AutoRegressiveDecoder(object):
 
 def insert_arguments(**arguments):
     """类的方法上插入一个带有默认值的参数"""
+
     def decorator(func):
         def new_func(self, *args, **kwargs):
             for k, v in arguments.items():
@@ -209,6 +211,7 @@ class DataGenerator(object):
                         batch_x, batch_y = [], []
     cifar10_generate = (file_names_with_label, batch_size=32, shuffle=True)
     """
+
     def __init__(self, data, batch_size=32, shuffle=True, buffer_size=None):
         """
         样本迭代器
@@ -217,7 +220,7 @@ class DataGenerator(object):
         self.batch_size = batch_size
         self.shuffle = shuffle
         if hasattr(data, '__len__'):
-            self.steps = int(np.ceil(len(data)/float(batch_size)))
+            self.steps = int(np.ceil(len(data) / float(batch_size)))
         else:
             self.steps = None
         self.buffer_size = buffer_size or batch_size * 1000
@@ -262,6 +265,7 @@ class DataGenerator(object):
 
         yield True, current_data
 
+    @abstractmethod
     def __iter__(self):
         """ 处理单个样本并构造batch data
         """
@@ -271,3 +275,19 @@ class DataGenerator(object):
         while True:
             for d in self.__iter__():
                 yield d
+
+
+def pad_sequences(sequences, maxlen=None, value=0):
+    """
+    pad sequences (num_samples, num_timesteps) to same length
+    """
+    if maxlen is None:
+        maxlen = max(len(x) for x in sequences)
+
+    outputs = []
+    for x in sequences:
+        x = x[:maxlen]
+        pad_range = (0, maxlen - len(x))
+        x = np.pad(x, pad_range, 'constant', value)
+        outputs.append(x)
+    return np.array(outputs)
