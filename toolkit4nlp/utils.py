@@ -4,7 +4,7 @@
 # @Email   : mingming.xu@zhaopin.com
 # @File    : utils.py
 import numpy as np
-
+from abc import abstractmethod
 
 def softmax(x, axis=-1):
     """numpy版softmax
@@ -191,3 +191,83 @@ def insert_arguments(**arguments):
         return new_func
 
     return decorator
+
+
+class DataGenerator(object):
+    """
+    数据生成器，用于生成 批量 样本
+    example:
+    class CIFAR10Generator(DataGenerator):
+            def __iter__(self):
+                batch_x, batch_y = [], []
+                for is_end, item in self.get_sample():
+                    file_name, y = item
+                    batch_x.append(resize(imread(file_name),(200,200))
+                    batch_y.append(y)
+                    if is_end or len(batch_x) == self.batch_size:
+                        yield batch_x, batch_y
+                        batch_x, batch_y = [], []
+    cifar10_generate = (file_names_with_label, batch_size=32, shuffle=True)
+    """
+    def __init__(self, data, batch_size=32, shuffle=True, buffer_size=None):
+        """
+        样本迭代器
+        """
+        self.data = data
+        self.batch_size = batch_size
+        self.shuffle = shuffle
+        if hasattr(data, '__len__'):
+            self.steps = int(np.ceil(len(data)/float(batch_size)))
+        else:
+            self.steps = None
+        self.buffer_size = buffer_size or batch_size * 1000
+
+    def __len__(self):
+        return self.steps
+
+    def get_sample(self):
+        """
+        gets one sample data with a flag of is this data is the last one
+        """
+        if self.shuffle:
+            if self.steps is None:
+                def generator():
+                    cache, buffer_full = [], False
+                    for item in self.data:
+                        cache.append(item)
+                        if buffer_full:
+                            idx = np.random.randint(len(cache))
+                            yield cache.pop(idx)
+                        elif len(cache) == self.buffer_size:
+                            buffer_full = True
+
+                    while cache:
+                        idx = np.random.randint(len(cache))
+                        yield cache.pop(idx)
+            else:
+                def generator():
+                    indices = list(range(len(self.data)))
+                    np.random.shuffle(indices)
+                    for idx in indices:
+                        yield self.data[idx]
+
+            data = generator()
+        else:
+            data = iter(self.data)
+
+        current_data = next(data)
+        for next_data in data:
+            yield False, current_data
+            current_data = next_data
+
+        yield True, current_data
+
+    def __iter__(self):
+        """ 处理单个样本并构造batch data
+        """
+        raise NotImplementedError
+
+    def fit(self):
+        while True:
+            for d in self.__iter__():
+                yield d
