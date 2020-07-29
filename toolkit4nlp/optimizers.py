@@ -161,7 +161,19 @@ def extend_with_gradient_accumulation(BaseOptimizer):
 
 @export_to_custom_objects
 def extend_with_wight_decay(BaseOptimizer):
-    """增加权重衰减"""
+    """增加权重衰减
+    ref: [DECOUPLED WEIGHT DECAY REGULARIZATION](https://arxiv.org/pdf/1711.05101.pdf)
+    大多数框架在实现L2 regularization时是使用weight decay，然而L2 regularization 与 weight decay 在标准 SGD下是等价的，
+    但是当使用Adam时，缺不是等价的，原因是：
+    g_t = ▽f_t-1 + λθ，其中λθ是 L2 loss的梯度
+    m_t = β_1 * m_t-1 + (1 - β_1) * g_t
+    v_t = β_2 * v_t-2 + (1 - β_2) * g_t^2
+    θ_t = θ_t - 1 - α(m_t / v_t^0.5 + ε)
+    代入上面三式后带有θ的项为 α（λθ/ v_t^0.5 + ε),这导致梯度变化越大的方向，权重约束越小，这显然不合理。
+    L2 regularization应该是各向同性。一种改进这个问题的方法就是将梯度下降与weight decay 解耦，
+    不在求梯度时代入weight decay ，而是在整个梯度下降完成后，加入weight decay，这样将梯度下降与weight decay解耦，
+    达到L2 regularization效果
+    """
 
     class NewOptimizer(BaseOptimizer):
         @insert_arguments(weight_decay_rate=0.01, exclude_from_weight_decay=[])
