@@ -400,3 +400,41 @@ class DGCNN(Layer):
 
     def compute_mask(self, inputs, mask):
         return mask
+
+
+class SinCosPositionEmbedding(Layer):
+    def __init__(self, embedding_dim=None, method='add', embedding=None, **kwargs):
+        self.method = method  # add or concate
+        self.embedding_dim = embedding_dim  # encoder embedding dim, d_pos
+        self.embedding = embedding
+        super(SinCosPositionEmbedding, self).__init__(**kwargs)
+
+    def call(self, inputs):
+        #     PE_2i(p) = sin(p/10000^(2i/d_pos))
+        #     PE_2i+1(p) = cos(p/10000^(2i/d_pos))
+        batch_size, seq_len, word_emb_dim = K.shape(inputs)[0], K.shape(inputs)[1], K.shape(inputs)[2]
+        if not self.embedding_dim or self.method == 'add':
+            self.embedding_dim = word_emb_dim
+        t = 2 * K.arange(self.embedding_dim / 2, dtype='float32') / K.cast(self.embedding_dim, dtype='float32')
+        embedding_wise_pos = 1. / K.pow(10000., t)  # 1/10000 ^(2i/d_pos) , shape = (p_dim/2, )
+        embedding_wise_pos = K.expand_dims(embedding_wise_pos, 0)  # (1, p_dim/2)
+        word_wise_pos = K.cumsum(K.ones_like(inputs[:, :, 0]), axis=1)  # shape = [batch_size, seq_len]
+        word_wise_pos = K.expand_dims(word_wise_pos, 2)  # (batch_size, seq_len, 1)
+        position_embedding = K.dot(word_wise_pos, embedding_wise_pos)  # (batch_size, seq_len, p_dim/2)
+
+        position_embedding = K.expand_dims(position_embedding, 3)
+        position_embedding = K.reshape(K.concatenate([K.sin(position_embedding), K.cos(position_embedding)], axis=-1),
+                                       shape=(batch_size, seq_len, -1))
+
+        if self.method == 'add':
+            return inputs + position_embedding
+
+        return K.concatenate([inputs, position_embedding], axis=-1)
+
+    def compute_output_shape(self, input_shape):
+        if self.method == 'add':
+            return input_shape
+        return input_shape[:-1] + (input_shape[-1] + self.embedding_dim,)
+
+    def compute_mask(self, inputs, mask=None):
+        return mask
