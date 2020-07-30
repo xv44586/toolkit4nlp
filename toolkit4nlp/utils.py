@@ -271,7 +271,7 @@ class DataGenerator(object):
         """
         raise NotImplementedError
 
-    def fit(self):
+    def generator(self):
         while True:
             for d in self.__iter__():
                 yield d
@@ -288,6 +288,6 @@ def pad_sequences(sequences, maxlen=None, value=0):
     for x in sequences:
         x = x[:maxlen]
         pad_range = (0, maxlen - len(x))
-        x = np.pad(x, pad_range, 'constant', value)
+        x = np.pad(array=x, pad_width=pad_range, mode='constant', constant_values=value)
         outputs.append(x)
     return np.array(outputs)
