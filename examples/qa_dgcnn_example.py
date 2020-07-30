@@ -7,17 +7,22 @@
 bert + dgcnn fine-tuning to do qa task
 """
 import json, os
+
+os.environ['TF_KERAS'] = '1'
+
 import numpy as np
+import tensorflow as tf
 from toolkit4nlp.backend import keras, K
 from toolkit4nlp.models import build_transformer_model
 from toolkit4nlp.tokenizers import Tokenizer
 from toolkit4nlp.optimizers import Adam
 from toolkit4nlp.utils import pad_sequences, DataGenerator
-from toolkit4nlp.layers import Layer, Dense, Permute, DGCNN, Lambda, Dropout, Input, AttentionPooling1D, \
-    SinCosPositionEmbedding
+from toolkit4nlp.layers import Layer, Dense, Permute, Input, Layer, Lambda, Dropout
+from toolkit4nlp.layers import AttentionPooling1D, DGCNN, SinCosPositionEmbedding
 from toolkit4nlp.models import Model
-
 from tqdm import tqdm
+
+tf.compat.v1.disable_eager_execution()  # eager 在infer时特别特别慢
 
 K.clear_session()
 # 基本信息
@@ -135,21 +140,6 @@ class data_generator(DataGenerator):
                     batch_token_ids, batch_segment_ids, batch_labels = [], [], []
 
 
-class MaskedSoftmax(Layer):
-    """在序列长度那一维进行softmax，并mask掉padding部分
-    """
-
-    def compute_mask(self, inputs, mask=None):
-        return None
-
-    def call(self, inputs, mask=None):
-        if mask is not None:
-            mask = K.cast(mask, K.floatx())
-            mask = K.expand_dims(mask, 2)
-            inputs = inputs - (1.0 - mask) * 1e12
-        return K.softmax(inputs, 1)
-
-
 class ConcatSeq2Vec(Layer):
     def __init__(self, **kwargs):
         super(ConcatSeq2Vec, self).__init__(**kwargs)
@@ -170,21 +160,29 @@ class ConcatSeq2Vec(Layer):
         return input_shape[0][:-1] + (input_shape[0][-1] + input_shape[1][-1],)
 
 
-def concat_seq_vec(x):
-    seq, vec = x
-    vec = K.expand_dims(vec, 1)
-    vec = K.tile(vec, [1, K.shape(seq)[1], 1])
-    return K.concatenate([seq, vec], 2)
+class MaskedSoftmax(Layer):
+    """在序列长度那一维进行softmax，并mask掉padding部分
+    """
+
+    def compute_mask(self, inputs, mask=None):
+        return None
+
+    def call(self, inputs, mask=None):
+        if mask is not None:
+            mask = K.cast(mask, K.floatx())
+            mask = K.expand_dims(mask, 2)
+            inputs = inputs - (1.0 - mask) * 1e12
+        return K.softmax(inputs, 1)
 
 
+# build model
 model = build_transformer_model(
     config_path,
     checkpoint_path,
 )
 
-inputs = [Input(shape=model.input[0].shape[1:]), Input(shape=model.input[1].shape[1:])]
+inputs = [Input(shape=K.int_shape(model.inputs[0])[1:]), Input(shape=K.int_shape(model.inputs[1])[1:])]
 output = model(inputs)
-
 output = SinCosPositionEmbedding(K.int_shape(output)[-1])(output)
 
 output = Dropout(0.5)(output)
@@ -248,15 +246,17 @@ def extract_answer(question, context, max_a_len=32):
     """抽取答案函数
     """
     max_q_len = 64
-    q_token_ids = tokenizer.encode(question, max_length=max_q_len)[0]
+    q_token_ids = tokenizer.encode(question, maxlen=max_q_len)[0]
     c_token_ids = tokenizer.encode(
-        context, max_length=maxlen - len(q_token_ids) + 1
+        context, maxlen=maxlen - len(q_token_ids) + 1
     )[0]
     token_ids = q_token_ids + c_token_ids[1:]
     segment_ids = [0] * len(q_token_ids) + [1] * (len(c_token_ids) - 1)
     c_tokens = tokenizer.tokenize(context)[1:-1]
     mapping = tokenizer.rematch(context, c_tokens)
-    probas = model.predict([[token_ids], [segment_ids]])[0]
+    token_ids = np.array([token_ids])  # tf2.X 必须要转np.array
+    segment_ids = np.array([segment_ids])
+    probas = model.predict([token_ids, segment_ids])[0]
     probas = probas[:, len(q_token_ids):-1]
     start_end, score = None, -1
     for start, p_start in enumerate(probas[0]):
@@ -315,12 +315,12 @@ class Evaluator(keras.callbacks.Callback):
 
 if __name__ == '__main__':
     train_generator = data_generator(train_data, batch_size)
-    evaluator = Evaluator()
 
-    model.fit_generator(
-        train_generator.forfit(),
+    evaluator = Evaluator()
+    model.fit(
+        train_generator.generator(),
         steps_per_epoch=len(train_generator),
-        epochs=10,
+        epochs=5,
         callbacks=[evaluator]
     )
 else:
