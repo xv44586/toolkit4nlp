@@ -34,7 +34,6 @@ class Adam(keras.optimizers.Optimizer):
 
     def __init__(self, learning_rate=0.001, beta_1=0.9, beta_2=0.99, epsilon=1e-6, bias_correct=True, **kwargs):
         kwargs['name'] = kwargs.get('name', 'Adam')
-        self.learning_rate = learning_rate
         super(Adam, self).__init__(**kwargs)
         self._set_hyper('learning_rate', learning_rate)
         self._set_hyper('beta_1', beta_1)
@@ -48,12 +47,12 @@ class Adam(keras.optimizers.Optimizer):
             self.add_slot(var, 'v')
 
     def _resource_apply(self, grad, var, indices=None):
-        var_dtype = var.dtype.base_type
+        var_dtype = var.dtype.base_dtype
         lr_t = self._decayed_lr(var_dtype)
         m = self.get_slot(var, 'm')
-        v = self._get_hyper(var, 'v')
+        v = self.get_slot(var, 'v')
         beta_1_t = self._get_hyper('beta_1', var_dtype)
-        beta_2_t = self.get_slot('beta_2', var_dtype)
+        beta_2_t = self._get_hyper('beta_2', var_dtype)
         local_step = K.cast(self.iterations + 1, var_dtype)
         beta_1_power = K.pow(beta_1_t, local_step)
         beta_2_power = K.pow(beta_2_t, local_step)
@@ -76,7 +75,7 @@ class Adam(keras.optimizers.Optimizer):
             var_t = var - lr_t * m_t / (K.sqrt(v_t) + self.epsilon)
             return K.update(var, var_t)
 
-    def _resource_apply_dense(self, grad, var, indices):
+    def _resource_apply_dense(self, grad, var):
         return self._resource_apply(grad, var)
 
     def _resource_apply_sparse(self, grad, var, indices):
