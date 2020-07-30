@@ -8,7 +8,7 @@ import re
 import numpy as np
 import tensorflow as tf
 
-from toolkit4nlp.backend import keras, K
+from toolkit4nlp.backend import keras, K, is_tf_keras
 from toolkit4nlp.utils import *
 
 
@@ -33,7 +33,7 @@ class Adam(keras.optimizers.Optimizer):
     '''
 
     def __init__(self, learning_rate=0.001, beta_1=0.9, beta_2=0.99, epsilon=1e-6, bias_correct=True, **kwargs):
-        kwargs['name'] = kwargs.get('name', Adam)
+        kwargs['name'] = kwargs.get('name', 'Adam')
         self.learning_rate = learning_rate
         super(Adam, self).__init__(**kwargs)
         self._set_hyper('learning_rate', learning_rate)
@@ -106,7 +106,7 @@ def export_to_custom_objects(extend_with_func):
 
 
 @export_to_custom_objects
-def extend_with_gradient_accumulation(BaseOptimizer):
+def extend_with_gradient_accumulation_tf2(BaseOptimizer):
     class NewOptimizer(BaseOptimizer):
         @insert_arguments(grad_accum_steps=2)
         def __init__(self, *args, **kwargs):
@@ -160,7 +160,13 @@ def extend_with_gradient_accumulation(BaseOptimizer):
 
 
 @export_to_custom_objects
-def extend_with_wight_decay(BaseOptimizer):
+def extend_with_gradient_accumulation_tf2(BaseOptimizer):
+    """原生keras版"""
+    pass
+
+
+@export_to_custom_objects
+def extend_with_wight_decay_tf2(BaseOptimizer):
     """增加权重衰减
     ref: [DECOUPLED WEIGHT DECAY REGULARIZATION](https://arxiv.org/pdf/1711.05101.pdf)
     大多数框架在实现L2 regularization时是使用weight decay，然而L2 regularization 与 weight decay 在标准 SGD下是等价的，
@@ -215,7 +221,13 @@ def extend_with_wight_decay(BaseOptimizer):
 
 
 @export_to_custom_objects
-def extend_with_piecewise_linear_lr(BaseOptimizer):
+def extend_with_wight_decay(BaseOptimizer):
+    """原生keras版"""
+    pass
+
+
+@export_to_custom_objects
+def extend_with_piecewise_linear_lr_tf2(BaseOptimizer):
     """
     分段线性学习率，使用场景如 warmup
     """
@@ -268,3 +280,24 @@ def extend_with_piecewise_linear_lr(BaseOptimizer):
             return config
 
     return NewOptimzer
+
+
+@export_to_custom_objects
+def extend_with_piecewise_linear_lr(BaseOptimizer):
+    """原生keras版"""
+    pass
+
+
+# keras or tf.keras
+if is_tf_keras:
+    extend_with_piecewise_linear_lr = extend_with_piecewise_linear_lr_tf2
+    extend_with_gradient_accumulation = extend_with_gradient_accumulation_tf2
+    extend_with_wight_decay = extend_with_wight_decay_tf2
+else:
+    Adam = keras.optimizers.Adam
+
+custom_objects = {
+    'Adam': Adam
+}
+
+keras.utils.get_custom_objects().update(custom_objects)
