@@ -395,3 +395,34 @@ class Tokenizer(BasicTokenizer):
         text = re.sub(punctuation_regex, '\\1', text)
         text = re.sub('(\d\.) (\d)', '\\1\\2', text)  # 删除数字小数点中间空格
         return text.strip()
+
+    def rematch(self, text, tokens):
+        """原始text 与 tokenize后的token的映射关系"""
+        if is_py2:
+            text = unicode(text)
+        if self._do_lower_case:
+            text = text.lower()
+
+        char_mapping = []
+        normalized_text = ''
+        for i, char in enumerate(text):
+            if self._do_lower_case:
+                char = unicodedata.normalize("NFD", char)
+                char = ''.join([ch for ch in char if unicodedata.category(ch) != 'Mn'])
+
+            char = ''.join([ch for ch in char if  not (ord(ch) == 0 or ord(ch) == 0xfffd or is_control(ch))])
+            normalized_text += char
+            char_mapping.extend([i]*len(char))
+
+        token_mapping = []
+        offset = 0
+        for token in tokens:
+            if self._is_special_token(token):
+                token_mapping.append([])
+            else:
+                token = remove_remark(token)
+                start = normalized_text[offset:].index(token) + offset
+                end = start + len(token)
+                token_mapping.append(char_mapping[start: end])
+                offset = end
+        return token_mapping
