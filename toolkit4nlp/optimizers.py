@@ -159,9 +159,57 @@ def extend_with_gradient_accumulation_tf2(BaseOptimizer):
 
 
 @export_to_custom_objects
-def extend_with_gradient_accumulation_tf2(BaseOptimizer):
+def extend_with_gradient_accumulation(BaseOptimizer):
     """原生keras版"""
-    pass
+
+    class NewOptimizer(BaseOptimizer):
+        @insert_arguments(grad_accum_steps=2)
+        def __init__(self, *args, **kwargs):
+            super(NewOptimizer, self).__init__(*args, **kwargs)
+            self._first_grad = True  # first grad
+
+        @K.symbolic
+        def get_update(self, loss, params):
+            # 是否更新
+            cond = K.equal(self.iterations % self.grad_accum_steps, 0)
+            cond = K.cast(cond, K.floatx())
+            # 获取梯度
+            grads = self.get_gradients(loss, params)
+            self.accum_grads = [K.zeros(
+                shape=K.int_shape(p), dtype=K.dtype(p), name='accum_grad_{}'.format(i)) for i, p in enumerate(params)]
+
+            old_update = K.update
+
+            def new_update(x, new_x):
+                new_x = cond * new_x + (1 - cond) * x
+                return old_update(x, new_x)
+
+            K.update = new_update
+            updates = super(NewOptimizer, self).get_update(loss, params)
+            K.update = old_update
+
+            # 累计更新
+            with K.control_dependencies(updates):
+                acc_updates = [
+                    K.update(ag, g + (1 - cond) * ag) for ag, g in zip(self.accum_grads, grads)
+                ]
+
+            return acc_updates
+
+        def get_gradients(self, loss, params):
+            grads = super(NewOptimizer, self).get_gradients(loss, params)
+            if self._first_grad:
+                self._first_grad = False
+                return grads
+            else:
+                return [ag / self.grad_accum_steps for ag in self.accum_grads]
+
+        def get_config(self):
+            config = {'grad_accum_steps': self.grad_accum_steps}
+            base_config = super(NewOptimizer, self).get_config()
+            return dict(list(base_config.items()) + list(config.items()))
+
+    return NewOptimizer
 
 
 @export_to_custom_objects
@@ -222,7 +270,46 @@ def extend_with_wight_decay_tf2(BaseOptimizer):
 @export_to_custom_objects
 def extend_with_wight_decay(BaseOptimizer):
     """原生keras版"""
-    pass
+
+    class NewOptimizer(BaseOptimizer):
+        @insert_arguments(weight_decay_rate=0.01, exclude_from_weight_decay=[])
+        def __init__(self, *args, **kwargs):
+            super(NewOptimizer, self).__init__(*args, **kwargs)
+            if not hasattr(self, 'learning_rate'):
+                self.learning_rate = self.lr
+
+        @K.symbolic
+        def get_update(self, loss, params):
+            old_update = K.update
+
+            def new_update(x, new_x):
+                if x in params and self._do_use_weight_decay(x):
+                    new_x = new_x - self.learning_rate * self.weight_decay_rate * x
+                return old_update(x, new_x)
+
+            K.update = new_update
+            updates = super(NewOptimizer, self).get_update(loss, params)
+            K.update = old_update
+            return updates
+
+        def _do_use_weight_decay(self, param):
+            """Whether to use L2 weight decay for `param_name`."""
+            param_name = param.name
+            if not self.weight_decay_rate:
+                return False
+            if self.exclude_from_weight_decay:
+                for r in self.exclude_from_weight_decay:
+                    if re.search(r, param_name) is not None:
+                        return False
+            return True
+
+        def get_config(self):
+            config = {'weight_decay_rate': self.weight_decay_rate,
+                      'exclude_from_weight_decay': self.exclude_from_weight_decay}
+            base_config = super(NewOptimizer, self).get_config()
+            return dict(list(base_config.items()) + list(config.items()))
+
+    return NewOptimizer
 
 
 @export_to_custom_objects
