@@ -329,35 +329,11 @@ def extend_with_piecewise_linear_lr_tf2(BaseOptimizer):
             super(NewOptimzer, self).__init__(*args, **kwargs)
             self.lr_schedule = {int(t): v for t, v in self.lr_schedule.items()}
 
-        def _piecewise_lr(self):
-            global_steps = self.iterations
-            schedule = sorted(self.lr_schedule.items())
-            if schedule[0][0] != 0:
-                schedule = [(0, 0.0)] + schedule  # 增加起点
-
-            v = K.cast(schedule[0][1], K.floatx())
-            p = K.cast(global_steps, K.floatx())
-
-            for i in range(len(schedule)):
-                p_begin = schedule[i][0]
-                v_begin = v
-                if i != len(schedule) - 1:
-                    point_range = schedule[i + 1][0] - schedule[i][0]
-                    value_range = schedule[i + 1][1] - schedule[i][1]
-                    rate = 1.0 * value_range / point_range
-                    v = schedule[i][1] + rate * (p - p_begin)
-                else:
-                    v = K.cast(schedule[i][1], K.floatx())
-
-                v = K.switch(p > p_begin, v, v_begin)
-            return v
-
         def _decayed_lr(self, var_dtypes):
             """重写获取decayed learning rate 方法"""
 
             lr_t = super(NewOptimzer, self)._decayed_lr(var_dtypes)
-            lr_rate = self._piecewise_lr()
-            K.print_tensor(lr_t)
+            lr_rate = piecewise_linear(self.iterations, self.lr_schedule)
             return lr_t * K.cast(lr_rate, var_dtypes)
 
         def get_config(self):
@@ -371,7 +347,34 @@ def extend_with_piecewise_linear_lr_tf2(BaseOptimizer):
 @export_to_custom_objects
 def extend_with_piecewise_linear_lr(BaseOptimizer):
     """原生keras版"""
-    pass
+    class NewOptimizer(BaseOptimizer):
+        @insert_arguments(lr_schedule={0:1})
+        def __init__(self, *args, **kwargs):
+            super(NewOptimizer, self).__init__(*args, **kwargs)
+            self.lr_schedule = {int(t): v for t, v in self.lr_schedule.items()}
+
+        @K.symbolic
+        def get_update(self, loss, params):
+            # 获取当前 step 的 lr rate
+            lr_rate_t = piecewise_linear(self.iterations, self.lr_schedule)
+
+            old_update = K.update
+
+            def new_update(x, new_x):
+                new_x = x + (new_x - x) * lr_rate_t  # 按照当前lr rate 缩放 update
+                return old_update(x, new_x)
+
+            K.update = new_update
+            updates = super(NewOptimizer, self).get_update(loss, params)
+            K.update = old_update
+            return updates
+
+        def get_config(self):
+            config = {'lr_schedule': self.lr_schedule}
+            base_config = super(NewOptimizer, self).get_config()
+            return dict(list(base_config.items()) + list(config.items()))
+
+    return NewOptimizer
 
 
 # keras or tf.keras
