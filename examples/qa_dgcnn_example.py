@@ -8,28 +8,24 @@ bert + dgcnn fine-tuning to do qa task
 """
 import json, os
 
-os.environ['TF_KERAS'] = '1'
-
 import numpy as np
 import tensorflow as tf
 from toolkit4nlp.backend import keras, K
 from toolkit4nlp.models import build_transformer_model
 from toolkit4nlp.tokenizers import Tokenizer
-from toolkit4nlp.optimizers import Adam
+from toolkit4nlp.optimizers import Adam, extend_with_gradient_accumulation, extend_with_weight_decay
 from toolkit4nlp.utils import pad_sequences, DataGenerator
 from toolkit4nlp.layers import Layer, Dense, Permute, Input, Layer, Lambda, Dropout
 from toolkit4nlp.layers import AttentionPooling1D, DGCNN, SinCosPositionEmbedding
 from toolkit4nlp.models import Model
 from tqdm import tqdm
 
-tf.compat.v1.disable_eager_execution()  # eager 在infer时特别特别慢
-
 K.clear_session()
 # 基本信息
-maxlen = 256
+maxlen = 512
 epochs = 5
-batch_size = 16
-learing_rate = 2e-5
+batch_size = 4
+learning_rate = 2e-5
 
 # bert配置
 config_path = '/home/mingming.xu/pretrain/NLP/chinese_L-12_H-768_A-12/bert_config.json'
@@ -235,9 +231,19 @@ def sparse_accuracy(y_true, y_pred):
     return K.mean(K.cast(K.equal(y_true, y_pred), K.floatx()))
 
 
+# optimizer
+optimizer = extend_with_weight_decay(Adam)
+optimizer = extend_with_gradient_accumulation(optimizer)
+params = {
+    'learning_rate': learning_rate,
+    'weight_decay_rate': 1e-5,
+    'exclude_from_weight_decay': ['norm', 'bias'],
+    'grad_accum_steps': 4
+}
+optimizer = optimizer(**params)
 model.compile(
     loss=sparse_categorical_crossentropy,
-    optimizer=Adam(learing_rate),
+    optimizer=optimizer,
     metrics=[sparse_accuracy]
 )
 
