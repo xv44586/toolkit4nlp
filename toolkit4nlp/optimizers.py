@@ -213,7 +213,7 @@ def extend_with_gradient_accumulation(BaseOptimizer):
 
 
 @export_to_custom_objects
-def extend_with_wight_decay_tf2(BaseOptimizer):
+def extend_with_weight_decay_tf2(BaseOptimizer):
     """增加权重衰减
     ref: [DECOUPLED WEIGHT DECAY REGULARIZATION](https://arxiv.org/pdf/1711.05101.pdf)
     大多数框架在实现L2 regularization时是使用weight decay，然而L2 regularization 与 weight decay 在标准 SGD下是等价的，
@@ -268,7 +268,7 @@ def extend_with_wight_decay_tf2(BaseOptimizer):
 
 
 @export_to_custom_objects
-def extend_with_wight_decay(BaseOptimizer):
+def extend_with_weight_decay(BaseOptimizer):
     """原生keras版"""
 
     class NewOptimizer(BaseOptimizer):
@@ -381,7 +381,7 @@ def extend_with_piecewise_linear_lr(BaseOptimizer):
 if is_tf_keras:
     extend_with_piecewise_linear_lr = extend_with_piecewise_linear_lr_tf2
     extend_with_gradient_accumulation = extend_with_gradient_accumulation_tf2
-    extend_with_wight_decay = extend_with_wight_decay_tf2
+    extend_with_weight_decay = extend_with_weight_decay_tf2
 else:
     Adam = keras.optimizers.Adam
 
