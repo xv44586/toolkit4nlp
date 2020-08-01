@@ -6,7 +6,7 @@
 """
 bert + dgcnn fine-tuning to do qa task
 数据是百度2020icl比赛的机器阅读(http://lic2020.cipsc.org.cn/)
-F1: 83.7左右
+F1: 82左右
 """
 import json, os
 
