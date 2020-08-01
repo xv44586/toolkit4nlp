@@ -169,7 +169,7 @@ def extend_with_gradient_accumulation(BaseOptimizer):
             self._first_grad = True  # first grad
 
         @K.symbolic
-        def get_update(self, loss, params):
+        def get_updates(self, loss, params):
             # 是否更新
             cond = K.equal(self.iterations % self.grad_accum_steps, 0)
             cond = K.cast(cond, K.floatx())
@@ -185,7 +185,7 @@ def extend_with_gradient_accumulation(BaseOptimizer):
                 return old_update(x, new_x)
 
             K.update = new_update
-            updates = super(NewOptimizer, self).get_update(loss, params)
+            updates = super(NewOptimizer, self).get_updates(loss, params)
             K.update = old_update
 
             # 累计更新
@@ -197,10 +197,9 @@ def extend_with_gradient_accumulation(BaseOptimizer):
             return acc_updates
 
         def get_gradients(self, loss, params):
-            grads = super(NewOptimizer, self).get_gradients(loss, params)
             if self._first_grad:
                 self._first_grad = False
-                return grads
+                return super(NewOptimizer, self).get_gradients(loss, params)
             else:
                 return [ag / self.grad_accum_steps for ag in self.accum_grads]
 
