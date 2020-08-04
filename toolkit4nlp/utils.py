@@ -295,7 +295,6 @@ def pad_sequences(sequences, maxlen=None, value=0):
 
 
 def piecewise_linear(global_steps, lr_schedule):
-
     schedule = sorted(lr_schedule.items())
     if schedule[0][0] != 0:
         schedule = [(0, 0.0)] + schedule  # 增加起点
@@ -316,3 +315,45 @@ def piecewise_linear(global_steps, lr_schedule):
 
         v = K.switch(p > p_begin, v, v_begin)
     return v
+
+
+class ViterbiDecoder(object):
+    """viterbi 解码基类"""
+
+    def __init__(self, trans, starts=None, ends=None):
+        """
+        :param trans:  转移矩阵
+        :param starts:  开始标签index集合
+        :param ends: 结束标签index集合
+        :return:
+        """
+        self.trans = trans
+        self.num_labels = len(trans)
+        self.starts = starts
+        self.ends = ends
+
+        self.non_starts = []
+        self.non_ends = []
+        if starts is not None:
+            all_labels = list(range(self.num_labels))
+            self.non_starts = [label for label in all_labels if label not in starts]
+        if ends is not None:
+            all_labels = list(range(self.num_labels))
+            self.non_ends = [label for label in all_labels if label not in starts]
+
+    def decode(self, points):
+        """points shape: (sequence_length, num_labels)"""
+        points[0, self.non_starts] -= np.inf
+        points[-1, self.non_ends] -= np.inf
+        paths = np.arange(self.num_labels).reshape((-1, 1))
+        score = points[0].reshape((-1, 1))
+        labels = paths
+        for idx in range(1, len(points)):
+            all_scores = score + self.trans + points[idx].reshape((1, -1))
+            max_idx = all_scores.argmax(0)
+            score = all_scores.max(0).reshape((-1, 1))
+            paths = np.concatenate([paths[max_idx:, ], labels], axis=-1)
+
+        return paths[score[:, 0].argmax(), :]
+
+
