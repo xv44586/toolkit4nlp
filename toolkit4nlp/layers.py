@@ -506,7 +506,7 @@ class ConditionalRandomField(Layer):
         mask = K.cast(mask, K.floatx())
         # 计算目标分数
         y_true, y_pred = y_true * mask, y_pred * mask
-        target_score = self.path_score(y_true, y_pred)
+        target_score = self.path_score(y_pred, y_true)
         # 递归计算log Z
         init_states = [y_pred[:, 0]]
         y_pred = K.concatenate([y_pred, mask], axis=2)
