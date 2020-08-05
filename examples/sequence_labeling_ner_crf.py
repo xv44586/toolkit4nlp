@@ -7,7 +7,8 @@
 CRF做中文命名实体识别
 数据源：http://s3.bmio.net/kashgari/china-people-daily-ner-corpus.tar.gz
 标签：BIEO
-F1: 94.5
+valid data F1: 95.7
+test data F1: 94.8
 """
 
 import os
