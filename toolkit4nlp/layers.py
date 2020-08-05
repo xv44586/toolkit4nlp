@@ -458,7 +458,7 @@ class ConditionalRandomField(Layer):
                                       initializer='glorot_uniform',
                                       trainable=True)
         if self.lr_multiplier != 1:
-            K.set_value(self._trans, self._trans/self.lr_multiplier)
+            K.set_value(self._trans, K.eval(self._trans) / self.lr_multiplier)
 
     @property
     def trans(self):
@@ -488,9 +488,9 @@ class ConditionalRandomField(Layer):
         trans_score = tf.einsum('bti,ij,btj->b', labels[:, :-1], self.trans, labels[:, 1:])  # 标签转移得分
         return point_score + trans_score
 
-    def log_num_step(self, inputs, states):
+    def log_norm_step(self, inputs, states):
         """递归求解归一化因子"""
-        inputs, mask = inputs[:,:-1], inputs[:,-1:]
+        inputs, mask = inputs[:, :-1], inputs[:, -1:]
         states = K.expand_dims(states[0], 2)  # batch_size,output_dim, 1
         trans = K.expand_dims(self.trans, 0)  # 1, output_dim, output_dim
         outputs = K.logsumexp(states + trans, 1)
@@ -506,7 +506,7 @@ class ConditionalRandomField(Layer):
         mask = K.cast(mask, K.floatx())
         # 计算目标分数
         y_true, y_pred = y_true * mask, y_pred * mask
-        target_score = self.target_score(y_true, y_pred)
+        target_score = self.path_score(y_true, y_pred)
         # 递归计算log Z
         init_states = [y_pred[:, 0]]
         y_pred = K.concatenate([y_pred, mask], axis=2)
