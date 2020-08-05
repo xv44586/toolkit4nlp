@@ -352,8 +352,6 @@ class ViterbiDecoder(object):
             all_scores = score + self.trans + points[idx].reshape((1, -1))
             max_idx = all_scores.argmax(0)
             score = all_scores.max(0).reshape((-1, 1))
-            paths = np.concatenate([paths[max_idx:, ], labels], axis=-1)
+            paths = np.concatenate([paths[max_idx, :], labels], axis=-1)
 
         return paths[score[:, 0].argmax(), :]
-
-
