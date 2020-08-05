@@ -16,18 +16,14 @@ import tensorflow as tf
 import numpy as np
 from toolkit4nlp.models import build_transformer_model
 from toolkit4nlp.tokenizers import Tokenizer
-from toolkit4nlp.optimizers import Adam
 from toolkit4nlp.utils import ViterbiDecoder
 from toolkit4nlp.utils import pad_sequences, DataGenerator
 from tensorflow import keras
 from keras.layers import Dense
 from keras.models import Model
-from keras.losses import categorical_crossentropy
 from keras.optimizers import Adam
 from toolkit4nlp.layers import ConditionalRandomField
-from toolkit4nlp.layers import Layer
 from toolkit4nlp.backend import K
-from toolkit4nlp.backend import sequence_masking
 from toolkit4nlp.optimizers import extend_with_gradient_accumulation
 from tqdm import tqdm
 
@@ -155,8 +151,8 @@ class NamedEntityRecognizer(ViterbiDecoder):
         mapping = tokenizer.rematch(text, tokens)
         token_ids = tokenizer.tokens_to_ids(tokens)
         segment_ids = [0] * len(token_ids)
-        token_ids = np.array(token_ids)
-        segment_ids = np.array(segment_ids)
+        token_ids = np.array([token_ids])
+        segment_ids = np.array([segment_ids])
         nodes = model.predict([token_ids, segment_ids])[0]
         labels = self.decode(nodes)
         entities, starting = [], False
