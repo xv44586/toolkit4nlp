@@ -26,7 +26,7 @@ from toolkit4nlp.layers import ConditionalRandomField
 from toolkit4nlp.optimizers import extend_with_gradient_accumulation
 
 train_path = '/home/mingming.xu/datasets/NLP/segment/icwb-2-data/training/pku_training.utf8'
-test_path = '/home/mingming.xu/datasets/NLP/segment/icwb-2-data/testing/pku_training.utf8'
+test_path = '/home/mingming.xu/datasets/NLP/segment/icwb-2-data/testing/pku_test.utf8'
 data_dir = '/home/mingming.xu/datasets/NLP/segment/icwb-2-data/'
 test_result_path = 'test_result.txt'
 test_score_path = 'test_score.txt'
@@ -62,7 +62,7 @@ np.random.shuffle(row_nums)
 
 train_data = [data[i] for i in row_nums if i % 10 != 0]
 val_data = [data[i] for i in row_nums if i % 10 == 0]
-
+print(len(train_data), len(val_data))
 
 class data_generator(DataGenerator):
     def __iter__(self, random=False):
@@ -117,7 +117,7 @@ class WordSeg(ViterbiDecoder):
 
         words = []
         for i, label in enumerate(labels[1:-1]):
-            if label < 2:
+            if label < 2 or len(words)==0:
                 words.append([i + 1])
             else:
                 words[-1].append(i + 1)
@@ -142,6 +142,7 @@ def evaluate(data):
 
 def public_evaluate(test_path, test_result_path, test_score_path):
     """官方评测，结果在score file 的最后几行"""
+    model.load_weights('./best_model.weights')
     fw = open(test_result_path, 'w', encoding='utf-8')
     with open(test_path, encoding='utf-8') as fr:
         for l in tqdm(fr):
