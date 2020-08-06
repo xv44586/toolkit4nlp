@@ -151,9 +151,10 @@ def public_evaluate(test_path, test_result_path, test_score_path):
             fw.write(l + '\n')
     fw.close()
     # 运行官方评测脚本
-    os.system(
+    with os.popen(
         '{data_dir}/scripts/score {data_dir}/gold/pku_training_words.utf8 {data_dir}/gold/pku_test_gold.utf8 {test_result_path} > {test_score_path}'.format(
-            data_dir=data_dir, test_result_path=test_result_path, test_score_path=test_score_path))
+            data_dir=data_dir, test_result_path=test_result_path, test_score_path=test_score_path)) as p:
+        p.read()
 
     # 打印结果的最后两行
     result = open(test_score_path).readlines()
