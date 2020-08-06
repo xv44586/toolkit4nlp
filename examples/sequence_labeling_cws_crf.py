@@ -142,7 +142,6 @@ def evaluate(data):
 
 def public_evaluate(test_path, test_result_path, test_score_path):
     """官方评测，结果在score file 的最后几行"""
-    model.load_weights('./best_model.weights')
     fw = open(test_result_path, 'w', encoding='utf-8')
     with open(test_path, encoding='utf-8') as fr:
         for l in tqdm(fr):
@@ -179,6 +178,7 @@ class Evaluator(keras.callbacks.Callback):
         print('acc is: {:.3f}, best acc is :{:.4f}'.format(acc, self.best_acc))
 
     def on_train_end(self, logs=None):
+        model.load_weights('./best_model.weights')
         public_evaluate(test_path, test_result_path, test_score_path)
 
 
