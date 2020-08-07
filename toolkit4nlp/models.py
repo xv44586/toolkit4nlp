@@ -123,11 +123,12 @@ class Transformer(object):
         arguments = {} if arguments is None else arguments
 
         # add prefix
-        name = self.prefixed(kwargs.get('name'))
+        name = self.prefixed(layer_name)
         kwargs['name'] = name
 
         if layer_name not in self.layers:
-            current_layer = layer(name=layer_name, **kwargs)
+            current_layer = layer(**kwargs)
+            layer_name = current_layer.name
             self.layers[layer_name] = current_layer
 
         return self.layers[layer_name](inputs, **arguments)
