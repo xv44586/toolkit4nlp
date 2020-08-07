@@ -21,20 +21,21 @@ class Transformer(object):
     """
 
     def __init__(self,
-                 vocab_size,
-                 hidden_size,
-                 num_hidden_layers,
-                 num_attention_heads,
-                 intermediate_size,
-                 hidden_act=None,
-                 hidden_dropout_prob=None,
-                 attentioin_probs_dropout_prob=None,
-                 initializer_range=None,
-                 embedding_size=None,
-                 seq_length=None,
-                 attention_mask=None,
-                 layers=None,
-                 name=None,
+                 vocab_size,  # 词表大小
+                 hidden_size,  # 编码维度
+                 num_hidden_layers,  # Transformer总的层数
+                 num_attention_heads,  # Attention头数
+                 intermediate_size,  # FeedForward 层的隐层维度
+                 hidden_act=None,  # FeedFoward 层的激活函数
+                 hidden_dropout_prob=None,  # FeedForward 层dropout 比例
+                 attentioin_probs_dropout_prob=None,  # attention 层dropout 比例
+                 initializer_range=None,  # 初始化分布
+                 embedding_size=None,  # embedding 层维度
+                 seq_length=None,  # 是否固定序列长度
+                 attention_mask=None,  # attention 层mask
+                 layers=None,  # 外部传人的layer
+                 name=None,  # 模型名
+                 prefix=None,  # layer name 的前缀
                  **kwargs):
         """
 
@@ -66,6 +67,7 @@ class Transformer(object):
         self.attention_mask = attention_mask
         self.layers = layers or {}
         self.name = name
+        self.prefix = prefix or ''
         self.built = False
 
     def build(self, **kwargs):
@@ -119,6 +121,11 @@ class Transformer(object):
             return inputs
 
         arguments = {} if arguments is None else arguments
+
+        # add prefix
+        name = self.prefixed(kwargs.get('name'))
+        kwargs['name'] = name
+
         if layer_name not in self.layers:
             current_layer = layer(name=layer_name, **kwargs)
             self.layers[layer_name] = current_layer
@@ -146,7 +153,7 @@ class Transformer(object):
 
     def load_weights_from_checkpoint(self, checkpoint, mapping=None):
         mapping = mapping or self.variable_mapping()
-        mapping = {k: v for k, v in mapping.items() if k in self.layers}
+        mapping = {self.prefixed(k): v for k, v in mapping.items() if k in self.layers}
 
         weights_values_pairs = []
         for layer_name, variables in mapping.items():
@@ -162,7 +169,7 @@ class Transformer(object):
 
     def save_weights_as_checkpoint(self, checkpoint_path, mapping=None):
         mapping = mapping or self.variable_mapping()
-        mapping = {k: v for k, v in mapping.items() if k in self.layers}
+        mapping = {self.prefixed(k): v for k, v in mapping.items() if k in self.layers}
 
         with tf.Graph().as_default():
             for layer_name, variables in mapping.items():
@@ -174,6 +181,10 @@ class Transformer(object):
                 sess.run(tf.global_variable_initialzer())
                 saver = tf.train.Saver()
                 saver.save(sess, checkpoint_path, write_meta_graph=False)
+
+    def prefixed(self, name):
+        if name is not None:
+            return self.prefix + name
 
 
 class BERT(Transformer):
