@@ -106,17 +106,17 @@ class Transformer(object):
     def apply_task_related(self, inputs):
         raise NotImplementedError
 
-    def apply(self, inputs, layer=None, layer_name=None, arguments=None, **kwargs):
-        '''
+    def apply(self, inputs=None, layer=None, layer_name=None, arguments=None, **kwargs):
+        """
          记录layer信息方便后续mapping权重服务；重用同名layer;
          layer(name=layer_name, **kwargs)(inputs, **arguments)
-        :param layer_name:
-        :param inputs:
+        :param inputs: 上一层的输出
         :param layer: 具体layer
+        :param layer_name: 层的名字
         :param arguments: 计算时使用参数
         :param kwargs: 初始化参数
         :return:
-        '''
+        """
         if layer is Dropout and self.hidden_dropout_prob == 0:
             return inputs
 
@@ -126,12 +126,15 @@ class Transformer(object):
         name = self.prefixed(layer_name)
         kwargs['name'] = name
 
-        if layer_name not in self.layers:
+        if name not in self.layers:
             current_layer = layer(**kwargs)
-            layer_name = current_layer.name
-            self.layers[layer_name] = current_layer
+            name = current_layer.name
+            self.layers[name] = current_layer
 
-        return self.layers[layer_name](inputs, **arguments)
+        if inputs is None:
+            return self.layers[name]
+
+        return self.layers[name](inputs, **arguments)
 
     def get_initializer(self, initializer_range):
         """
