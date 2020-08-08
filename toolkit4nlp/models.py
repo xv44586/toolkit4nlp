@@ -193,6 +193,7 @@ class Transformer(object):
     def set_outputs(self, outputs):
         if not isinstance(outputs, list):
             outputs = [outputs]
+
         outputs = outputs[:]
         self.outputs = outputs
         if len(outputs) > 1:
@@ -224,8 +225,12 @@ class BERT(Transformer):
             self.with_pool = True
 
     def get_inputs(self):
-        token_in = Input((self.seq_length,), name='Input-Token')
-        segment_in = Input((self.seq_length,), name='Input-Segment')
+        token_in = self.apply(layer=Input,
+                              layer_name='Input-Token',
+                              shape=(self.seq_length,))
+        segment_in = self.apply(layer=Input,
+                                layer_name='Input-Segment',
+                                shape=(self.seq_length,))
 
         return [token_in, segment_in]
 
@@ -279,6 +284,7 @@ class BERT(Transformer):
         x_pre, x = inputs, [inputs, inputs, inputs]
         arguments = {'a_mask': None}
         if attention_mask is not None:
+            arguments['a_mask'] = True
             arguments['a_mask'] = attention_mask
 
         # self-attention
@@ -287,6 +293,7 @@ class BERT(Transformer):
                        attention_name,
                        head_nums=self.num_attention_heads,
                        head_size=self.num_attention_size,
+                       arguments=arguments,
                        kernel_initializer=self.initializer)
         x = self.apply(x,
                        Dropout,
