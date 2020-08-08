@@ -203,13 +203,13 @@ class PositionEmbedding(Layer):
                  input_dim,
                  output_dim,
                  merge_mode='add',
-                 initializer='zero',
+                 embeddings_initializer='zero',
                  **kwargs):
         super(PositionEmbedding, self).__init__(**kwargs)
         self.input_dim = input_dim
         self.output_dim = output_dim
         self.merge_mode = merge_mode
-        self.embeddings_initializer = initializers.get(initializer)
+        self.embeddings_initializer = initializers.get(embeddings_initializer)
 
     def build(self, input_shape):
         super(PositionEmbedding, self).build(input_shape)
@@ -237,8 +237,10 @@ class PositionEmbedding(Layer):
 
     def get_config(self):
         base_config = super(PositionEmbedding, self).get_config()
-        base_config.update({'input_dim': self.input_dim, 'output_dim': self.output_dim, 'merge_mode': self.merge_mode,
-                            'initializer': initializers.serialize(self.initializer)})
+        base_config.update({'input_dim': self.input_dim,
+                            'output_dim': self.output_dim,
+                            'merge_mode': self.merge_mode,
+                            'embeddings_initializer': initializers.serialize(self.embeddings_initializer)})
         return base_config
 
 
