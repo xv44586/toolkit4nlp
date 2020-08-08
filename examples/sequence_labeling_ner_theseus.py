@@ -3,21 +3,26 @@
 # @Date     :{DATE}
 # @Author   : mingming.xu
 # @Email    : xv44586@gmail.com
+"""
+BERT-of-Theseus,一种简洁的模型压缩方法
+ref:
+ - https://arxiv.org/abs/2002.02925
+ - https://kexue.fm/archives/7575
+"""
 import os
 
-import tensorflow as tf
 import numpy as np
 import re
+from tqdm import tqdm
+
 from toolkit4nlp.models import build_transformer_model
 from toolkit4nlp.tokenizers import Tokenizer
-from toolkit4nlp.optimizers import Adam
 from toolkit4nlp.utils import ViterbiDecoder
 from toolkit4nlp.utils import pad_sequences, DataGenerator
 from toolkit4nlp.models import Model
 from toolkit4nlp.optimizers import Adam
 from toolkit4nlp.layers import *
 from toolkit4nlp.backend import K, sequence_masking
-
 
 vocab_dict = '/home/mingming.xu/pretrain/NLP/chinese_L-12_H-768_A-12/vocab.txt'
 config_path = '/home/mingming.xu/pretrain/NLP/chinese_L-12_H-768_A-12/bert_config.json'
@@ -27,11 +32,12 @@ data_dir = '/home/mingming.xu/datasets/NLP/ner/company_ner'
 train_path = os.path.join(data_dir, 'train.csv')
 test_path = os.path.join(data_dir, 'dev.csv')
 
-tokenizer = Tokenizer(vocab_dict,do_lower_case=True)
+tokenizer = Tokenizer(vocab_dict, do_lower_case=True)
 
-maxlen = 128
+maxlen = 256
 lr = 1e-5
-batch_size = 24
+epochs = 5
+batch_size = 16
 
 
 def load_data(filename):
@@ -54,6 +60,7 @@ def load_data(filename):
 
         D.append(d)
     return D
+
 
 train_data = load_data(train_path)
 test_data = load_data(test_path)
@@ -115,6 +122,7 @@ class data_generator(DataGenerator):
 class BinaryRandomChoice(Layer):
     """随机二选一
     """
+
     def __init__(self, **kwargs):
         super(BinaryRandomChoice, self).__init__(**kwargs)
         self.supports_masking = True
@@ -131,6 +139,33 @@ class BinaryRandomChoice(Layer):
 
     def compute_output_shape(self, input_shape):
         return input_shape[1]
+
+def bert_of_theseus(predecessor, successor, classifier):
+    """bert of theseus：固定住 predecessor 和 classifier，随机替换， predecessor中的block为successor对应层来训练successor
+    """
+    inputs = predecessor.inputs
+    # 固定住已经训练好的层
+    for layer in predecessor.model.layers:
+        layer.trainable = False
+    classifier.trainable = False
+    # Embedding层替换
+    predecessor_outputs = predecessor.apply_embeddings(inputs)
+    successor_outputs = successor.apply_embeddings(inputs)
+    outputs = BinaryRandomChoice()([predecessor_outputs, successor_outputs])
+    # Transformer层替换
+    layers_per_module = predecessor.num_hidden_layers // successor.num_hidden_layers
+    for index in range(successor.num_hidden_layers):
+        predecessor_outputs = outputs
+        for sub_index in range(layers_per_module):
+            predecessor_outputs = predecessor.apply_attention_layers(
+                predecessor_outputs, layers_per_module * index + sub_index
+            )
+        successor_outputs = successor.apply_attention_layers(outputs, index)
+        outputs = BinaryRandomChoice()([predecessor_outputs, successor_outputs])
+    # 返回模型
+    outputs = classifier(outputs)
+    model = Model(inputs, outputs)
+    return model
 
 # 加载预训练模型（12层）
 predecessor = build_transformer_model(
@@ -156,10 +191,7 @@ CRF = ConditionalRandomField(lr_multiplier=2)
 x = CRF(x)
 classifier = Model(x_in, x)
 
-
-from toolkit4nlp.optimizers import extend_with_gradient_accumulation
-opt = extend_with_gradient_accumulation(Adam)
-opt = opt(learning_rate=5e-6)
+opt = Adam(learning_rate=lr)
 
 predecessor_model = Model(predecessor.inputs, classifier(predecessor.outputs))
 predecessor_model.compile(loss=CRF.sparse_loss,
@@ -170,52 +202,25 @@ predecessor_model.summary()
 
 successor_model = Model(successor.inputs, classifier(successor.outputs))
 successor_model.compile(loss=CRF.sparse_loss,
-                       optimizer=opt,
-                       metrics=[CRF.sparse_accuracy])
+                        optimizer=opt,
+                        metrics=[CRF.sparse_accuracy])
 successor_model.summary()
 
 
-def bert_theseus(predecessor, successor, classifier):
-    """
-    固定predecessor和classifier，随机替换predecessor中的block 为successor来训练successor
-    """
-    inputs = predecessor.inputs
-    # 固定predecessor参数
-    for layer in predecessor.model.layers:
-        layer.trainable = False
-    classifier.trainable = False
-
-    # 随机替换embedding层
-    predecessor_outputs = predecessor.apply_embeddings(inputs)
-    successor_outputs = successor.apply_embeddings(inputs)
-    outputs = BinaryRandomChoice()([predecessor_outputs, successor_outputs])
-    # 替换transformer层
-    layer_per_block = predecessor.num_hidden_layers // successor.num_hidden_layers
-    for index in range(successor.num_hidden_layers):
-        predecessor_outputs = outputs
-        for sub_index in range(layer_per_block):
-            predecessor_outputs = predecessor.apply_transformer(predecessor_outputs,
-                                                                sub_index + index * layer_per_block)
-
-        successor_outputs = successor.apply_transformer(outputs, index)
-        outputs = BinaryRandomChoice()([predecessor_outputs, successor_outputs])
-
-    outputs = classifier(outputs)
-    return Model(inputs, outputs)
 
 
-theseus_model = bert_theseus(predecessor, successor, classifier)
+
+theseus_model = bert_of_theseus(predecessor, successor, classifier)
 theseus_model.compile(loss=CRF.sparse_loss,
                       optimizer=opt,
                       metrics=[CRF.sparse_accuracy])
 theseus_model.summary()
 
-from toolkit4nlp.utils import ViterbiDecoder
-
 
 class NamedEntityRecognizer(ViterbiDecoder):
     """命名实体识别器
     """
+
     def recognize(self, text, model):
         tokens = tokenizer.tokenize(text)
         while len(tokens) > 512:
@@ -245,8 +250,6 @@ class NamedEntityRecognizer(ViterbiDecoder):
 
 
 NER = NamedEntityRecognizer(trans=K.eval(CRF.trans), starts=[0], ends=[0])
-
-from tqdm import tqdm
 
 
 def evaluate(data, model):
@@ -289,9 +292,7 @@ class Evaluator(keras.callbacks.Callback):
         )
 
 
-if __name__  == '__main__':
-    epochs = 1
-    batch_size = 16
+if __name__ == '__main__':
     train_generator = data_generator(train_data, batch_size)
 
     predecessor_model_name = 'predecessor_best.weights'
@@ -299,8 +300,7 @@ if __name__  == '__main__':
 
     predecessor_model.fit_generator(
         train_generator.generator(),
-        #         steps_per_epoch=len(train_generator),
-        steps_per_epoch=20,
+        steps_per_epoch=len(train_generator),
         epochs=epochs,
         callbacks=[predecessor_evaluator]
     )
@@ -309,9 +309,10 @@ if __name__  == '__main__':
     theseus_model.fit_generator(
         train_generator.generator(),
         steps_per_epoch=len(train_generator),
-        epochs=epochs * 2,
+        epochs=epochs,
         callbacks=[theseus_evaluator]
     )
+
     theseus_model.load_weights(theseus_model_name)
 
     successor_model_name = 'successor_best.weights'
