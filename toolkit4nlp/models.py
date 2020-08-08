@@ -6,12 +6,7 @@
 import six
 import json
 
-import tensorflow as tf
-from keras.layers import *
-from keras import initializers, activations
 from keras.models import Model
-
-from toolkit4nlp.backend import K, keras, sequence_masking
 from toolkit4nlp.layers import *
 
 
@@ -29,7 +24,6 @@ class Transformer(object):
                  hidden_act=None,  # FeedFoward 层的激活函数
                  hidden_dropout_prob=None,  # FeedForward 层dropout 比例
                  attentioin_probs_dropout_prob=None,  # attention 层dropout 比例
-                 initializer_range=None,  # 初始化分布
                  embedding_size=None,  # embedding 层维度
                  seq_length=None,  # 是否固定序列长度
                  attention_mask=None,  # attention 层mask
@@ -61,7 +55,6 @@ class Transformer(object):
         self.hidden_act = hidden_act
         self.hidden_dropout_prob = hidden_dropout_prob
         self.attention_probs_dropout_prob = attentioin_probs_dropout_prob or hidden_dropout_prob
-        self.initializer = self.get_initializer(initializer_range)
         self.embedding_size = embedding_size or hidden_size
         self.seq_length = seq_length
         self.attention_mask = attention_mask
@@ -75,8 +68,8 @@ class Transformer(object):
             return
 
         # inputs
-        self.inputs = self.get_inputs()
-
+        inputs = self.get_inputs()
+        self.set_inputs(inputs)
         # call
         outputs = self.call(self.inputs)
         self.set_outputs(outputs)
@@ -136,11 +129,12 @@ class Transformer(object):
 
         return self.layers[name](inputs, **arguments)
 
-    def get_initializer(self, initializer_range):
+    @property
+    def initializer(self):
         """
         截断正态分布初始化
         """
-        return keras.initializers.TruncatedNormal(stddev=initializer_range)
+        return keras.initializers.TruncatedNormal(stddev=0.02)
 
     def get_inputs(self):
         raise NotImplementedError
@@ -189,6 +183,19 @@ class Transformer(object):
     def prefixed(self, name):
         if name is not None:
             return self.prefix + name
+
+    def set_inputs(self, inputs):
+        if inputs is None:
+            inputs = []
+        elif not isinstance(inputs, list):
+            inputs = [inputs]
+
+        inputs = inputs[:]
+        self.inputs = inputs
+        if len(inputs) > 1:
+            self.input = inputs
+        else:
+            self.input = inputs[0]
 
     def set_outputs(self, outputs):
         if not isinstance(outputs, list):
@@ -257,7 +264,7 @@ class BERT(Transformer):
                        PositionEmbedding, 'Embedding-Position',
                        input_dim=self.max_position,
                        output_dim=self.embedding_size,
-                       initializer=self.initializer,
+                       embeddings_initializer=self.initializer,
                        merge_mode='add')
 
         x = self.apply(x,

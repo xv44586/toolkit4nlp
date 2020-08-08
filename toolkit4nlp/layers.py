@@ -209,13 +209,13 @@ class PositionEmbedding(Layer):
         self.input_dim = input_dim
         self.output_dim = output_dim
         self.merge_mode = merge_mode
-        self.initializer = initializers.get(initializer)
+        self.embeddings_initializer = initializers.get(initializer)
 
     def build(self, input_shape):
         super(PositionEmbedding, self).build(input_shape)
         self.embeddings = self.add_weight(name='position_embedding',
                                           shape=(self.input_dim, self.output_dim),
-                                          initializer=self.initializer)
+                                          initializer=self.embeddings_initializer)
 
     def call(self, inputs):
         input_shape = K.shape(inputs)
