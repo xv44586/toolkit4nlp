@@ -5,6 +5,7 @@
 # @File    : sequence_labeling_ner_crf.py
 """
 CRF做中文命名实体识别
+crf 介绍： https://xv44586.github.io/2019/12/26/from-softmax-to-crf/
 数据源：http://s3.bmio.net/kashgari/china-people-daily-ner-corpus.tar.gz
 标签：BIEO
 valid data F1: 95.7%
