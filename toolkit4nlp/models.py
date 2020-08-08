@@ -192,7 +192,7 @@ class Transformer(object):
 
     def set_outputs(self, outputs):
         if not isinstance(outputs, list):
-            outputs = outputs
+            outputs = [outputs]
         outputs = outputs[:]
         self.outputs = outputs
         if len(outputs) > 1:
