@@ -78,8 +78,8 @@ class Transformer(object):
         self.inputs = self.get_inputs()
 
         # call
-        self.outputs = self.call(self.inputs)
-
+        outputs = self.call(self.inputs)
+        self.set_outputs(outputs)
         # model
         self.model = Model(self.inputs, self.outputs, name=self.name)
 
@@ -189,6 +189,16 @@ class Transformer(object):
     def prefixed(self, name):
         if name is not None:
             return self.prefix + name
+
+    def set_outputs(self, outputs):
+        if not isinstance(outputs, list):
+            outputs = outputs
+        outputs = outputs[:]
+        self.outputs = outputs
+        if len(outputs) > 1:
+            self.output = outputs
+        else:
+            self.output = outputs[0]
 
 
 class BERT(Transformer):
