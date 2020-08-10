@@ -25,8 +25,7 @@ from bert4keras.snippets import open
 from keras.layers import Input, Lambda, Dense, Layer
 from keras.models import Model
 
-num_classes = 119
-maxlen = 128
+maxlen = 256
 batch_size = 16
 
 # BERT base
@@ -267,7 +266,7 @@ successor = build_transformer_model(
 # 判别模型
 x_in = Input(shape=K.int_shape(predecessor.output)[1:])
 # x = Lambda(lambda x: x[:, 0])(x_in)
-x = Dense(units=num_classes, activation='softmax')(x_in)
+x = Dense(units=num_labels, activation='softmax')(x_in)
 classfier = Model(x_in, x)
 
 predecessor_model = Model(predecessor.inputs, classfier(predecessor.output))
