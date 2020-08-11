@@ -268,19 +268,26 @@ class BERT(Transformer):
                                        )
         token_with_seg = self.apply([token_embedding, segment_embedding], Add, name='Embedding-Token-Segment')
         x = self.apply(token_with_seg,
-                       PositionEmbedding, name='Embedding-Position',
+                       PositionEmbedding,
+                       name='Embedding-Position',
                        input_dim=self.max_position,
                        output_dim=self.embedding_size,
                        embeddings_initializer=self.initializer,
                        merge_mode='add')
 
         x = self.apply(x,
-                       LayerNormalization, name='Embedding-Norm')
-        x = self.apply(x, Dropout,
-                       name='Embedding-Dropout', rate=self.dropout_rate)
+                       LayerNormalization,
+                       name='Embedding-Norm')
+        x = self.apply(x,
+                       Dropout,
+                       name='Embedding-Dropout',
+                       rate=self.dropout_rate)
         if self.hidden_size != self.embedding_size:
-            x = self.apply(x, Dense, name='Embedding-Mapping',
-                           units=self.hidden_size, kernel_initializer=self.initializer)
+            x = self.apply(x,
+                           Dense,
+                           name='Embedding-Mapping',
+                           units=self.hidden_size,
+                           kernel_initializer=self.initializer)
 
         return x
 
