@@ -277,6 +277,19 @@ class DataGenerator(object):
             for d in self.__iter__():
                 yield d
 
+    def take(self, nums=1):
+        """take nums * batch examples"""
+        d = []
+        for i,data in enumerate(self.__iter__()):
+            if i >= nums:
+                break
+
+            d.append(data)
+
+        if nums == 1:
+            return d[0]
+        return d
+
 
 def pad_sequences(sequences, maxlen=None, value=0):
     """
