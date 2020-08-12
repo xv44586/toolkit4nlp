@@ -268,7 +268,9 @@ class FeedForward(Layer):
                              activation=self.activation,
                              use_bias=self.use_bias,
                              kernel_initializer=self.kernel_initializer)
-        self.dense_2 = Dense(units=input_shape[-1], use_bias=self.use_bias, kernel_initializer=self.kernel_initializer)
+        self.dense_2 = Dense(units=input_shape[-1],
+                             use_bias=self.use_bias,
+                             kernel_initializer=self.kernel_initializer)
 
     def call(self, inputs, **kwargs):
         x = self.dense_1(inputs)
@@ -278,7 +280,11 @@ class FeedForward(Layer):
 
 class BiasAdd(Layer):
     def build(self, input_shape):
-        self.bias = self.add_weight('bias', shape=(input_shape[-1],), initializer='zero', trainable=True)
+        super(BiasAdd, self).build(input_shape)
+        self.bias = self.add_weight('bias',
+                                    shape=(input_shape[-1],),
+                                    initializer='zero',
+                                    trainable=True)
 
     def call(self, inputs, **kwargs):
         return K.bias_add(inputs, self.bias)
