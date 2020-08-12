@@ -6,8 +6,8 @@
 import six
 import json
 
-from keras.models import Model
 from toolkit4nlp.layers import *
+from keras.models import Model
 
 
 class Transformer(object):
@@ -381,7 +381,7 @@ class BERT(Transformer):
                            )
             # 重用embedding-token layer
             x = self.apply(x, Embedding, 'Embedding-Token', arguments={'mode': 'dense'})
-            x = self.apply(x, BiadAdd, 'MLM-Bias')
+            x = self.apply(x, BiasAdd, 'MLM-Bias')
             x = self.apply(x, Activation, 'MLM-Activation', activation='softmax')
             outputs.append(x)
 

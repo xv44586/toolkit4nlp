@@ -276,7 +276,7 @@ class FeedForward(Layer):
         return x
 
 
-class BiadAdd(Layer):
+class BiasAdd(Layer):
     def build(self, input_shape):
         self.bias = self.add_weight('bias', shape=(input_shape[-1],), initializer='zero', trainable=True)
 
@@ -561,3 +561,20 @@ class ConditionalRandomField(Layer):
         }
         base_config = super(ConditionalRandomField, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
+
+
+custom_objects = {
+    'Embedding': Embedding,
+    'BiasAdd': BiasAdd,
+    'MultiHeadAttention': MultiHeadAttention,
+    'LayerNormalization': LayerNormalization,
+    'TokenAndPositionEmbedding': TokenAndPositionEmbedding,
+    'PositionEmbedding': PositionEmbedding,
+    'FeedForward': FeedForward,
+    'AttentionPooling1D': AttentionPooling1D,
+    'ConditionalRandomField': ConditionalRandomField,
+    'DGCNN': DGCNN,
+    'SinCosPositionEmbedding': SinCosPositionEmbedding,
+}
+
+keras.utils.get_custom_objects().update(custom_objects)
