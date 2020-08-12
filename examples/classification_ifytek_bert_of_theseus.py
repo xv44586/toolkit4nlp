@@ -122,10 +122,10 @@ def bert_of_theseus(predecessor, successor, classifier):
     for index in range(successor.num_hidden_layers):
         predecessor_outputs = outputs
         for sub_index in range(layers_per_module):
-            predecessor_outputs = predecessor.apply_main_layers(
+            predecessor_outputs = predecessor.apply_attention_layers(
                 predecessor_outputs, layers_per_module * index + sub_index
             )
-        successor_outputs = successor.apply_main_layers(outputs, index)
+        successor_outputs = successor.apply_attention_layers(outputs, index)
         outputs = BinaryRandomChoice()([predecessor_outputs, successor_outputs])
     # 返回模型
     outputs = classifier(outputs)
