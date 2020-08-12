@@ -313,6 +313,7 @@ class BERT(Transformer):
                        head_size=self.attention_head_size,
                        arguments=arguments,
                        kernel_initializer=self.initializer)
+
         x = self.apply(x,
                        Dropout,
                        name='%s-Dropout' % attention_name,
@@ -481,8 +482,11 @@ def build_transformer_model(
     if config_path is not None:
         configs.update(json.load(open(config_path)))
     configs.update(kwargs)
+    # convert config name
     if 'max_position' not in configs:
         configs['max_position'] = configs.get('max_position_embeddings')
+    if 'dropout_rate' not in configs:
+        configs['dropout_rate'] = configs.get('hidden_dropout_prob')
 
     models = {
         'bert': BERT,
