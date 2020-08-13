@@ -8,7 +8,7 @@ import re
 import numpy as np
 import tensorflow as tf
 
-from toolkit4nlp.backend import keras, K, is_tf_keras
+from toolkit4nlp.backend import keras, K, is_tf_keras, piecewise_linear
 from toolkit4nlp.utils import *
 
 

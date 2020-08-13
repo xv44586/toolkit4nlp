@@ -81,6 +81,28 @@ def sequence_masking(x, mask, mode=0, axis=1):
     return x - (1 - mask) * 1e12
 
 
+def piecewise_linear(global_steps, lr_schedule):
+    schedule = sorted(lr_schedule.items())
+    if schedule[0][0] != 0:
+        schedule = [(0, 0.0)] + schedule  # 增加起点
+
+    v = K.cast(schedule[0][1], K.floatx())
+    p = K.cast(global_steps, K.floatx())
+
+    for i in range(len(schedule)):
+        p_begin = schedule[i][0]
+        v_begin = v
+        if i != len(schedule) - 1:
+            point_range = schedule[i + 1][0] - schedule[i][0]
+            value_range = schedule[i + 1][1] - schedule[i][1]
+            rate = 1.0 * value_range / point_range
+            v = schedule[i][1] + rate * (p - p_begin)
+        else:
+            v = K.cast(schedule[i][1], K.floatx())
+
+        v = K.switch(p > p_begin, v, v_begin)
+    return v
+
 def swish(x):
     """swish函数（这样封装过后才有 __name__ 属性）
     """
