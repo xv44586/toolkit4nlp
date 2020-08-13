@@ -9,7 +9,7 @@ import tensorflow as tf
 from toolkit4nlp.backend import K, keras
 from toolkit4nlp.backend import sequence_masking
 from keras.layers import *
-from keras import initializers, layers, activations
+from keras import initializers, activations
 
 
 class Layer(keras.layers.Layer):
@@ -291,7 +291,7 @@ class BiasAdd(Layer):
         return K.bias_add(inputs, self.bias)
 
 
-class Embedding(layers.Embedding):
+class Embedding(keras.layers.Embedding):
 
     def compute_mask(self, inputs, mask=None):
         """为了适配T5，保证第一个token不被mask
@@ -315,7 +315,9 @@ class Embedding(layers.Embedding):
         self._mode = mode
         if mode == 'embedding':
             return super(Embedding, self).call(inputs)
-        return K.dot(inputs, K.transpose(self.embeddings))
+
+        kernel = K.transpose(self.embeddings)
+        return K.dot(inputs, kernel)
 
     def compute_output_shape(self, input_shape):
         if self._mode == 'embedding':
