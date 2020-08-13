@@ -158,10 +158,11 @@ class LayerNormalization(Layer):
         if self.scale:
             var = K.mean(K.square(output), axis=-1, keepdims=True)
             std = K.sqrt(var + self.epsilon)
-            output = output / std * self.gamma
+            output = output / std
+            output = output * self.gamma
 
         if self.center:
-            output += self.beta
+            output = output + self.beta
 
         return output
 
