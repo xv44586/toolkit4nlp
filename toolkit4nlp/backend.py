@@ -81,8 +81,33 @@ def sequence_masking(x, mask, mode=0, axis=1):
     return x - (1 - mask) * 1e12
 
 
+def swish(x):
+    """swish函数（这样封装过后才有 __name__ 属性）
+    """
+    return tf.nn.swish(x)
+
+
+def symbolic(f):
+    """恒等装饰器（兼容旧版本keras用）
+    """
+    return f
+
+
+def leaky_relu(x, alpha=0.2):
+    """leaky relu函数（这样封装过后才有 __name__ 属性）
+    """
+    return tf.nn.leaky_relu(x, alpha=alpha)
+
+
+# 给旧版本keras新增symbolic方法（装饰器），
+# 以便兼容optimizers.py中的代码
+K.symbolic = getattr(K, 'symbolic', None) or symbolic
 custom_objects = {
+    'gelu_erf': gelu_erf,
+    'gelu_tanh': gelu_tanh,
     'gelu': gelu_erf,
+    'swish': swish,
+    'leaky_relu': leaky_relu,
 }
 
 keras.utils.get_custom_objects().update(custom_objects)
