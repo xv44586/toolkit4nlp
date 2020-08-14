@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf8 -*-
-# @Date     :{DATE}
+# @Date     :2020/8/14
 # @Author   : mingming.xu
 # @Email    : xv44586@gmail.com
 """
@@ -12,14 +12,11 @@ ref:
 import os
 
 import numpy as np
-import re
 from tqdm import tqdm
 
-from toolkit4nlp.models import build_transformer_model
+from toolkit4nlp.models import build_transformer_model, Model
 from toolkit4nlp.tokenizers import Tokenizer
-from toolkit4nlp.utils import ViterbiDecoder
-from toolkit4nlp.utils import pad_sequences, DataGenerator
-from toolkit4nlp.models import Model
+from toolkit4nlp.utils import ViterbiDecoder, pad_sequences, DataGenerator
 from toolkit4nlp.optimizers import Adam
 from toolkit4nlp.layers import *
 from toolkit4nlp.backend import K, sequence_masking
@@ -28,9 +25,10 @@ vocab_dict = '/home/mingming.xu/pretrain/NLP/chinese_L-12_H-768_A-12/vocab.txt'
 config_path = '/home/mingming.xu/pretrain/NLP/chinese_L-12_H-768_A-12/bert_config.json'
 checkpoint_path = '/home/mingming.xu/pretrain/NLP/chinese_L-12_H-768_A-12/bert_model.ckpt'
 
-data_dir = '/home/mingming.xu/datasets/NLP/ner/company_ner'
-train_path = os.path.join(data_dir, 'train.csv')
-test_path = os.path.join(data_dir, 'dev.csv')
+data_dir = '/home/mingming.xu/datasets/NLP/ner/china-people-daily-ner-corpus/'
+train_path = os.path.join(data_dir, 'example.train')
+test_path = os.path.join(data_dir, 'example.test')
+val_path = os.path.join(data_dir, 'example.dev')
 
 tokenizer = Tokenizer(vocab_dict, do_lower_case=True)
 
@@ -44,40 +42,31 @@ def load_data(filename):
     D = []
     with open(filename, encoding='utf-8') as f:
         f = f.read()
-        d = []
-        for l in f.split('\n'):
-            l = l.strip()
-            if not l or len(l) < 1:
-                if d:
-                    D.append(d)
-                d = []
-            else:
-                if re.search('"', l):
-                    segs = l.strip().replace('"', '').split()
-                    d.append([' '.join(segs[-1:]), segs[-1]])
+        for l in f.split('\n\n'):
+            if not l:
+                continue
+            d, last_flag = [], ''
+            for c in l.split('\n'):
+                char, this_flag = c.split(' ')
+                if this_flag == 'O' and last_flag == 'O':
+                    d[-1][0] += char
+                elif this_flag == 'O' and last_flag != 'O':
+                    d.append([char, 'O'])
+                elif this_flag[:1] == 'B':
+                    d.append([char, this_flag[2:]])
                 else:
-                    d.append(l.split())
-
-        D.append(d)
+                    d[-1][0] += char
+                last_flag = this_flag
+            D.append(d)
     return D
 
 
 train_data = load_data(train_path)
 test_data = load_data(test_path)
-idx = list(range(len(train_data)))
-np.random.shuffle(idx)
-train_data = np.array(train_data)
-
-idx_train = [i for i in idx if i % 10 != 0]
-idx_valid = [i for i in idx if i % 10 == 0]
-
-valid_data = train_data[idx_valid]
-train_data = train_data[idx_train]
+valid_data = load_data(val_path)
 
 # 类别映射
-labels = ['O', 'BRA', 'DIR', 'PRO', 'COM', 'P_ADD', 'P_BRA', 'P_COM',
-          'ADD', 'ADD1', 'ADD2', 'P_DIR', 'P_ADD1', 'P_PRO', 'P1_BRA', 'P1_DIR', 'P1_COM', 'P_ADD2', 'P1_ADD',
-          'ADD3', 'P_ADD3', 'P1_ADD1', 'P1_ADD2', 'P_COM ', 'P1_PRO', 'P2_DIR', 'P2_COM', 'P2_ADD']
+labels = ['PER', 'LOC', 'ORG']
 id2label = dict(enumerate(labels))
 label2id = {j: i for i, j in id2label.items()}
 num_labels = len(labels) * 3 + 1
@@ -101,7 +90,6 @@ class data_generator(DataGenerator):
                         B = label2id[l] * 3 + 1
                         I = label2id[l] * 3 + 2
                         E = label2id[l] * 3 + 3
-
                         labels += ([B] + [I] * (len(w_token_ids) - 2) + [E] * int(len(w_token_ids) > 1))
                 else:
                     break
@@ -140,6 +128,7 @@ class BinaryRandomChoice(Layer):
     def compute_output_shape(self, input_shape):
         return input_shape[1]
 
+
 def bert_of_theseus(predecessor, successor, classifier):
     """bert of theseus：固定住 predecessor 和 classifier，随机替换， predecessor中的block为successor对应层来训练successor
     """
@@ -167,6 +156,7 @@ def bert_of_theseus(predecessor, successor, classifier):
     model = Model(inputs, outputs)
     return model
 
+
 # 加载预训练模型（12层）
 predecessor = build_transformer_model(
     config_path=config_path,
@@ -185,7 +175,7 @@ successor = build_transformer_model(
 )
 
 # 判别模型
-x_in = Input(shape=K.int_shape(predecessor.outputs)[1:])
+x_in = Input(shape=K.int_shape(predecessor.output)[1:])
 x = Dense(num_labels)(x_in)
 CRF = ConditionalRandomField(lr_multiplier=2)
 x = CRF(x)
@@ -194,24 +184,20 @@ classifier = Model(x_in, x)
 opt = Adam(learning_rate=lr)
 
 predecessor_model = Model(predecessor.inputs, classifier(predecessor.outputs))
-predecessor_model.compile(loss=CRF.sparse_loss,
+predecessor_model.compile(loss=predecessor_model.layers[-1].layers[-1].sparse_loss,
                           optimizer=opt,
                           metrics=[CRF.sparse_accuracy])
 
 predecessor_model.summary()
 
 successor_model = Model(successor.inputs, classifier(successor.outputs))
-successor_model.compile(loss=CRF.sparse_loss,
+successor_model.compile(loss=successor_model.layers[-1].layers[-1].sparse_loss,
                         optimizer=opt,
                         metrics=[CRF.sparse_accuracy])
 successor_model.summary()
 
-
-
-
-
 theseus_model = bert_of_theseus(predecessor, successor, classifier)
-theseus_model.compile(loss=CRF.sparse_loss,
+theseus_model.compile(loss=theseus_model.layers[-1].layers[-1].sparse_loss,
                       optimizer=opt,
                       metrics=[CRF.sparse_accuracy])
 theseus_model.summary()
@@ -273,7 +259,7 @@ class Evaluator(keras.callbacks.Callback):
         self.model_name = model_name
 
     def on_epoch_end(self, epoch, logs=None):
-        trans = K.eval(CRF.trans)
+        trans = K.eval(self.model.layers[-1].layers[-1].trans)
         NER.trans = trans
         print(NER.trans)
         f1, precision, recall = evaluate(valid_data, self.model)
@@ -298,18 +284,19 @@ if __name__ == '__main__':
     predecessor_model_name = 'predecessor_best.weights'
     predecessor_evaluator = Evaluator(predecessor_model_name)
 
-    predecessor_model.fit_generator(
+    predecessor_model.fit(
         train_generator.generator(),
         steps_per_epoch=len(train_generator),
         epochs=epochs,
         callbacks=[predecessor_evaluator]
     )
+
     theseus_model_name = 'theseus_best.weights'
     theseus_evaluator = Evaluator(theseus_model_name)
     theseus_model.fit_generator(
         train_generator.generator(),
         steps_per_epoch=len(train_generator),
-        epochs=epochs,
+        epochs=epochs * 2,
         callbacks=[theseus_evaluator]
     )
 
