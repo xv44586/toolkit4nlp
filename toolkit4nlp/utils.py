@@ -5,7 +5,6 @@
 # @File    : utils.py
 import numpy as np
 from abc import abstractmethod
-from toolkit4nlp.backend import K
 
 
 def softmax(x, axis=-1):
@@ -280,7 +279,7 @@ class DataGenerator(object):
     def take(self, nums=1):
         """take nums * batch examples"""
         d = []
-        for i,data in enumerate(self.__iter__()):
+        for i, data in enumerate(self.__iter__()):
             if i >= nums:
                 break
 
@@ -305,29 +304,6 @@ def pad_sequences(sequences, maxlen=None, value=0):
         x = np.pad(array=x, pad_width=pad_range, mode='constant', constant_values=value)
         outputs.append(x)
     return np.array(outputs)
-
-
-def piecewise_linear(global_steps, lr_schedule):
-    schedule = sorted(lr_schedule.items())
-    if schedule[0][0] != 0:
-        schedule = [(0, 0.0)] + schedule  # 增加起点
-
-    v = K.cast(schedule[0][1], K.floatx())
-    p = K.cast(global_steps, K.floatx())
-
-    for i in range(len(schedule)):
-        p_begin = schedule[i][0]
-        v_begin = v
-        if i != len(schedule) - 1:
-            point_range = schedule[i + 1][0] - schedule[i][0]
-            value_range = schedule[i + 1][1] - schedule[i][1]
-            rate = 1.0 * value_range / point_range
-            v = schedule[i][1] + rate * (p - p_begin)
-        else:
-            v = K.cast(schedule[i][1], K.floatx())
-
-        v = K.switch(p > p_begin, v, v_begin)
-    return v
 
 
 class ViterbiDecoder(object):
