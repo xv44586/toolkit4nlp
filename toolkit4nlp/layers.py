@@ -149,7 +149,7 @@ class LayerNormalization(Layer):
         if self.scale:
             self.gamma = self.add_weight(shape=(input_shape[-1],), initializer='ones', name='gamma')
 
-    def call(self, inputs, **kwargs):
+    def call(self, inputs):
         output = inputs
         if self.center:
             mean = K.mean(inputs, axis=-1, keepdims=True)
