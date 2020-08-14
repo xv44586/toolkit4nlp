@@ -20,15 +20,14 @@ ref:
 import json
 from toolkit4nlp.backend import keras, K
 from toolkit4nlp.tokenizers import Tokenizer
-from toolkit4nlp.models import build_transformer_model
+from toolkit4nlp.models import build_transformer_model, Model
 from toolkit4nlp.optimizers import Adam
 from toolkit4nlp.utils import pad_sequences, DataGenerator
-from keras.layers import Input, Lambda, Dense, Layer
-from keras.models import Model
+from toolkit4nlp.layers import Input, Lambda, Dense, Layer
 
 num_classes = 119
 maxlen = 128
-batch_size = 16
+batch_size = 32
 
 # BERT base
 config_path = '/home/mingming.xu/pretrain/NLP/chinese_L-12_H-768_A-12/bert_config.json'

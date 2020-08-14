@@ -13,21 +13,17 @@ test data F1: 94.8%
 """
 
 import os
+from tqdm import tqdm
 
 import tensorflow as tf
 import numpy as np
-from toolkit4nlp.models import build_transformer_model
+from toolkit4nlp.models import build_transformer_model, Model
 from toolkit4nlp.tokenizers import Tokenizer
-from toolkit4nlp.utils import ViterbiDecoder
-from toolkit4nlp.utils import pad_sequences, DataGenerator
-from tensorflow import keras
-from keras.layers import Dense
-from keras.models import Model
-from keras.optimizers import Adam
-from toolkit4nlp.layers import ConditionalRandomField
-from toolkit4nlp.backend import K
-from toolkit4nlp.optimizers import extend_with_gradient_accumulation
-from tqdm import tqdm
+from toolkit4nlp.utils import ViterbiDecoder, pad_sequences, DataGenerator
+from toolkit4nlp.backend import keras, K
+from toolkit4nlp.layers import *
+from toolkit4nlp.optimizers import Adam, extend_with_gradient_accumulation
+
 
 data_dir = '/home/mingming.xu/datasets/NLP/ner/china-people-daily-ner-corpus/'
 train_path = os.path.join(data_dir, 'example.train')
