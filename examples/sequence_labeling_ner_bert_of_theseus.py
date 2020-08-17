@@ -9,6 +9,10 @@ ref:
  - https://arxiv.org/abs/2002.02925
  - https://kexue.fm/archives/7575
 """
+"""
+新增 “加法” 模型，即不再使用随机替换的方式训练theseus_model,而采用将对应输出按比例相加的方式来训练。
+原因：复现时，随机的方式结果不稳定，有时得到的效果可能与直接fine-tuning类似，用加法模型结果更稳定一些
+"""
 import os
 
 import numpy as np
@@ -129,6 +133,30 @@ class BinaryRandomChoice(Layer):
         return input_shape[1]
 
 
+class ProportionalAdd(Layer):
+    """将两层的结果乘比例后相加，output = (input_1 * proportion + input_2 * (1 - proportion)) / 2
+    """
+
+    def __init__(self, proportion=0.5, **kwargs):
+        super(ProportionalAdd, self).__init__(**kwargs)
+        self.supports_masking = True
+        self.proportion = proportion
+
+    def compute_mask(self, inputs, mask=None):
+        if mask is not None:
+            return mask[1]
+
+    def call(self, inputs):
+        source, target = inputs
+        source = source * self.proportion
+        target = target * (1 - self.proportion)
+        output = (source + target)/2
+        return K.in_train_phase(output, target)
+
+    def compute_output_shape(self, input_shape):
+        return input_shape[1]
+
+
 def bert_of_theseus(predecessor, successor, classifier):
     """bert of theseus：固定住 predecessor 和 classifier，随机替换， predecessor中的block为successor对应层来训练successor
     """
@@ -140,7 +168,7 @@ def bert_of_theseus(predecessor, successor, classifier):
     # Embedding层替换
     predecessor_outputs = predecessor.apply_embeddings(inputs)
     successor_outputs = successor.apply_embeddings(inputs)
-    outputs = BinaryRandomChoice()([predecessor_outputs, successor_outputs])
+    outputs = ProportionalAdd()([predecessor_outputs, successor_outputs])
     # Transformer层替换
     layers_per_module = predecessor.num_hidden_layers // successor.num_hidden_layers
     for index in range(successor.num_hidden_layers):
@@ -150,7 +178,7 @@ def bert_of_theseus(predecessor, successor, classifier):
                 predecessor_outputs, layers_per_module * index + sub_index
             )
         successor_outputs = successor.apply_attention_layers(outputs, index)
-        outputs = BinaryRandomChoice()([predecessor_outputs, successor_outputs])
+        outputs = ProportionalAdd()([predecessor_outputs, successor_outputs])
     # 返回模型
     outputs = classifier(outputs)
     model = Model(inputs, outputs)
