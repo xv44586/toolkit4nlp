@@ -205,7 +205,7 @@ def remove_arguments(*argments):
                         '%s got an unexpected keyword argument \'%s\'' %
                         (self.__class__.__name__, k))
 
-            return func(*args, **kwargs)
+            return func(self, *args, **kwargs)
 
         return new_func
     return decorator
