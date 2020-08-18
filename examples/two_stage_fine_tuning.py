@@ -90,7 +90,6 @@ class Evaluator(keras.callbacks.Callback):
         self.savename = savename
 
     def on_epoch_end(self, epoch, logs=None):
-        print('last weights', self.model.layers[-1].layers[-1].weights[1][-10:])
         val_acc = evaluate(valid_generator, self.model)
         if val_acc > self.best_val_acc:
             self.best_val_acc = val_acc
