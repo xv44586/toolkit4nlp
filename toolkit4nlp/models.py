@@ -8,6 +8,7 @@ import json
 
 from toolkit4nlp.layers import *
 from keras.models import Model
+from toolkit4nlp.utils import remove_arguments
 
 
 class Transformer(object):
@@ -468,6 +469,25 @@ class BERT(Transformer):
         return mapping
 
 
+class ELECTRA(BERT):
+    @remove_arguments('with_mlm', 'with_pool')
+    def __init__(self, max_position, **kwargs):
+        super(ELECTRA, self).__init__(max_position, **kwargs)
+
+    def variable_mapping(self):
+        mapping = super(ELECTRA, self).variable_mapping()
+        mapping = {k: [name.replace('bert/', 'electra/') for name in v] for k, v in mapping.items()}
+        # embedding mapping
+        mapping['Embedding-Mapping'] = [
+            'electra/embeddings_project/kernel',
+            'electra/embeddings_project/bias',
+        ]
+        return mapping
+
+    def apply_task_related(self, inputs):
+        return inputs
+
+
 def build_transformer_model(
         config_path=None,
         checkpoint_path=None,
@@ -490,6 +510,7 @@ def build_transformer_model(
 
     models = {
         'bert': BERT,
+        'electra': ELECTRA,
     }
 
     if isinstance(model, six.string_types):

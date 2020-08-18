@@ -195,6 +195,22 @@ def insert_arguments(**arguments):
     return decorator
 
 
+def remove_arguments(*argments):
+    """类方法上禁用某些参数"""
+    def decorator(func):
+        def new_func(self, *args, **kwargs):
+            for k in argments:
+                if k in kwargs:
+                    raise TypeError(
+                        '%s got an unexpected keyword argument \'%s\'' %
+                        (self.__class__.__name__, k))
+
+            return func(*args, **kwargs)
+
+        return new_func
+    return decorator
+
+
 class DataGenerator(object):
     """
     数据生成器，用于生成 批量 样本
