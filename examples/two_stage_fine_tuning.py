@@ -4,7 +4,8 @@
 # @Email   : mingming.xu@zhaopin.com
 # @File    : two_stage_fine_tuning.py
 """
-实验验证 bert-of-theseus 中 theseus的必要性，结论上看theseus也许是多余的
+实验验证 bert-of-theseus 中 theseus的必要性：即不添加theseus，训练完predecessor后直接使用其前三层与classifier做fine tuning
+结果：即使对classifier 设置不同的学习率，结果依然无法突破bert直接3层fine tuning的结果，所以theseus还是需要的
 blog: https://xv44586.github.io/2020/08/09/bert-of-theseus/
 """
 import numpy as np
@@ -106,6 +107,55 @@ class Evaluator(keras.callbacks.Callback):
         #         print('name ', l.name, 'p: ', l.p)
 
 
+class ScaleDense(Dense):
+    """
+    可以设置scale学习率的dense层
+    """
+
+    def __init__(self, lr_multiplier=1, **kwargs):
+        super(ScaleDense, self).__init__(**kwargs)
+        self.lr_multiplier = lr_multiplier  # 学习率scale参数
+
+    def build(self, input_shape):
+        assert len(input_shape) >= 2
+        input_dim = input_shape[-1]
+
+        self._kernel = self.add_weight(shape=(input_dim, self.units),
+                                       initializer=self.kernel_initializer,
+                                       name='kernel',
+                                       regularizer=self.kernel_regularizer,
+                                       constraint=self.kernel_constraint)
+        if self.use_bias:
+            self._bias = self.add_weight(shape=(self.units,),
+                                         initializer=self.bias_initializer,
+                                         name='bias',
+                                         regularizer=self.bias_regularizer,
+                                         constraint=self.bias_constraint)
+        else:
+            self.bias = None
+        self.input_spec = InputSpec(min_ndim=2, axes={-1: input_dim})
+        self.built = True
+
+        if self.lr_multiplier != 1:
+            K.set_value(self._kernel, K.eval(self._kernel) / self.lr_multiplier)
+            K.set_value(self._bias, K.eval(self._bias) / self.lr_multiplier)
+
+    @property
+    def bias(self):
+        if self.lr_multiplier != 1:
+            return self._bias * self.lr_multiplier
+        return self._bias
+
+    @property
+    def kernel(self):
+        if self.lr_multiplier != 1:
+            return self._kernel * self.lr_multiplier
+        return self._kernel
+
+    def call(self, inputs):
+        return super(ScaleDense, self).call(inputs)
+
+
 # 加载预训练模型（12层）
 predecessor = build_transformer_model(
     config_path=config_path,
@@ -113,28 +163,6 @@ predecessor = build_transformer_model(
     return_keras_model=False,
     prefix='Predecessor-'
 )
-
-# 加载预训练模型（3层）
-successor = build_transformer_model(
-    config_path=config_path,
-    checkpoint_path=checkpoint_path,
-    return_keras_model=False,
-    num_hidden_layers=3,
-    prefix='Successor-'
-)
-
-
-def load_weights(predecessor_model, successor_model):
-    wv = []
-    for i, l in enumerate(successor_model.layers[2:-1]):
-        print(i + 2, l.name)
-        w = l.trainable_weights
-        v = predecessor_model.layers[i + 2].get_weights()
-        wv.extend(zip(w, v))
-    w = successor_model.layers[-1].trainable_weights
-    v = predecessor_model.layers[-1].get_weights()
-    wv.extend(zip(w, v))
-    K.batch_set_value(wv)
 
 
 # 判别模型
@@ -151,13 +179,23 @@ predecessor_model.compile(
 )
 predecessor_model.summary()
 
-successor_model = Model(successor.inputs, classifier(successor.output))
-successor_model.compile(
+
+# predecessor_model_3
+output = predecessor_model.layers[31].output  # 第3层transform
+output = Lambda(lambda x: x[:, 0])(output)
+dense = ScaleDense(lr_multiplier=5,
+                   units=num_classes,
+                   activation='softmax',
+                   weights=predecessor_model.layers[-1].get_weights())
+output = dense(output)
+
+predecessor_3_model = Model(predecessor_model.inputs, output)
+predecessor_3_model.compile(
     loss='sparse_categorical_crossentropy',
     optimizer=Adam(1e-5),  # 用足够小的学习率
     metrics=['sparse_categorical_accuracy'],
 )
-successor_model.summary()
+predecessor_3_model.summary()
 
 if __name__ == '__main__':
     epochs = 5
@@ -170,14 +208,12 @@ if __name__ == '__main__':
         callbacks=[predecessor_evaluator]
     )
 
-    # load weights
-    load_weights(predecessor_model, successor_model)
-
-    # 训练successor
-    successor_evaluator = Evaluator('best_successor.weights')
-    successor_model.fit_generator(
+    # 训练predecessor_3_model
+    predecessor_model.load_weights('best_predecessor.weights')
+    predecessor_3_evaluator = Evaluator('best_predecessor_3.weights')
+    predecessor_3_model.fit_generator(
         train_generator.generator(),
         steps_per_epoch=len(train_generator),
         epochs=10,
-        callbacks=[successor_evaluator]
+        callbacks=[predecessor_3_evaluator]
     )
