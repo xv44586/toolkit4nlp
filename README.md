@@ -4,7 +4,10 @@
  为了方便自己学习与理解一些东西，实现一些自己的想法
 
 ## Update info:
- -  <strong>2020.08.06</strong> 增加 cws-crf example,具体代码:<a href="https://github.com/xv44586/toolkit4nlp/blob/master/examples/sequence_labeling_cws_crf.py">cws_crf_example</a>
+  - <strong>2020.08.17</strong> 增加 two-stage-fine-tuning 实验，验证bert-of-theseus中theseus_model的必要性，具体代码: <a href="https://github.com/xv44586/toolkit4nlp/blob/master/examples/two_stage_fine_tuning.py">two_stage_fine_tuning</a>
+  - <strong>2020.08.14</strong> 增加 bert-of-theseus在ner相关实验下的代码，具体代码：<a href="https://github.com/xv44586/toolkit4nlp/blob/master/examples/sequence_labeling_ner_bert_of_theseus.py">sequence_labeling_ner_bert_of_theseus</a>
+  - <strong>2020.08.11</strong> 增加 bert-of-theseus在文本分类下的相关实验代码，具体代码:<a href="https://github.com/xv44586/toolkit4nlp/blob/master/examples/classification_ifytek_bert_of_theseus.py">classification_ifytek_bert_of_theseus</a> 
+  - <strong>2020.08.06</strong> 增加 cws-crf example,具体代码:<a href="https://github.com/xv44586/toolkit4nlp/blob/master/examples/sequence_labeling_cws_crf.py">cws_crf_example</a>
   - <strong>2020.08.05</strong> 增加 ner-crf example,具体代码:<a href="https://github.com/xv44586/toolkit4nlp/blob/master/examples/sequence_labeling_ner_crf.py">ner_crf_example</a>
   - <strong>2020.08.01</strong> 增加 bert + dgcnn 做 qa task, 具体代码:<a href="https://github.com/xv44586/toolkit4nlp/blob/master/examples/qa_dgcnn_example.py">qa_dgcnn_example</a>
   - <strong>2020.07.27</strong> 增加 pretraining，用法参照 <a href="https://github.com/xv44586/toolkit4nlp/blob/master/pretraining/README.md">pretraining/README.md</a>
