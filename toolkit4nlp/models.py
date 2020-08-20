@@ -488,6 +488,36 @@ class ELECTRA(BERT):
         return inputs
 
 
+def extend_with_language_model(BaseModel):
+    """
+    增加下三角mask矩阵，作为语言模型使用
+    """
+
+    class LanguageModel(BaseModel):
+        def __init__(self, *args, **kwargs):
+            super(LanguageModel, self).__init__(*args, **kwargs)
+            self.with_mlm = self.with_mlm or True  # mlm output
+
+        def compute_attention_mask(self, inputs=None):
+            """重写attention mask 计算逻辑
+            """
+            if self.attention_mask is None:
+
+                def compute_lm_mask(seq):
+                    seq_len = K.shape(seq)[1]
+                    idx = K.arange(0, seq_len)
+                    mask = idx[:, None] <= idx[None, :]
+                    mask = K.cast(mask, K.floatx())
+                    return mask[:, :]
+
+                self.attention_mask = self.apply(inputs=inputs[1],
+                                                 layer=Lambda,
+                                                 function=compute_lm_mask,
+                                                 name='Attention-LM-Mask')
+
+            return self.attention_mask
+
+
 def build_transformer_model(
         config_path=None,
         checkpoint_path=None,
@@ -518,6 +548,10 @@ def build_transformer_model(
         MODEL = models[model]
     else:
         MODEL = model
+
+    application = application.lower()
+    if application == 'lm':
+        MODEL = extend_with_language_model(MODEL)
 
     transformer = MODEL(**configs)
     transformer.build(**configs)
