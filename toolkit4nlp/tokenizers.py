@@ -255,8 +255,12 @@ class Tokenizer(BasicTokenizer):
 
         # update attribute of particular token
         for token in ['pad', 'unk', 'mask', 'start', 'end']:
-            token_id = token_dict[getattr(self, '_token_{}'.format(token))]
-            setattr(self, '_token_{}_id'.format(token), token_id)
+            # custom tokens may not have all of this tokens
+            try:
+                token_id = token_dict[getattr(self, '_token_{}'.format(token))]
+                setattr(self, '_token_{}_id'.format(token), token_id)
+            except:
+                pass
 
     def _basic_tokenize(self, text):
         text = convert_to_unicode(text)
