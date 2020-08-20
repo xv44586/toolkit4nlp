@@ -77,7 +77,7 @@ class MultiHeadAttention(Layer):
                 q_mask = K.cast(mask[0], K.floatx())
             if mask[2] is not None:
                 v_mask = K.cast(mask[2], K.floatx())
-        if a_mask:
+        if a_mask is not None:
             a_mask = inputs[idx]
             idx += 1
 
