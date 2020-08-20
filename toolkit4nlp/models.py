@@ -557,7 +557,7 @@ def extend_with_unilm(BaseModel):
             if self.attention_mask is None:
                 def compute_unilm_mask(segments):
                     idx = K.cumsum(segments, axis=1)
-                    mask = idx[:, None, :] >= idx[:, :, None]
+                    mask = idx[:, None, :] <= idx[:, :, None]
                     mask = K.cast(mask, K.floatx())
                     return mask[:, None]
 
