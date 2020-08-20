@@ -525,7 +525,7 @@ def extend_with_language_model(BaseModel):
                     mask = K.cast(mask, K.floatx())
                     return mask[None, None]
 
-                self.attention_mask = self.apply(inputs=inputs[1],
+                self.attention_mask = self.apply(inputs=self.inputs[1],
                                                  layer=Lambda,
                                                  function=compute_lm_mask,
                                                  name='Attention-LM-Mask')
@@ -561,7 +561,7 @@ def extend_with_unilm(BaseModel):
                     mask = K.cast(mask, K.floatx())
                     return mask[:, None]
 
-                self.attention_mask = self.apply(inputs=inputs[1],
+                self.attention_mask = self.apply(inputs=self.inputs[1],
                                                  layer=Lambda,
                                                  function=compute_unilm_mask,
                                                  name='Attention-UniLM-Attention')
