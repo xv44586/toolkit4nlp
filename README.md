@@ -4,6 +4,28 @@
  为了方便自己学习与理解一些东西，实现一些自己的想法
 
 ## Update info:
+  - <strong>2020.08.20</strong> 增加UniLM和LM model，使用方法：
+  ```python
+from toolkit4nlp.models import build_transformer_model
+config_path = '/home/mingming.xu/pretrain/NLP/chinese_electra_base_L-12_H-768_A-12/config.json'
+checkpoint_path = '/home/mingming.xu/pretrain/NLP/chinese_electra_base_L-12_H-768_A-12/electra_base.ckpt'
+
+
+# lm
+model = build_transformer_model(
+    config_path=config_path,
+    checkpoint_path=checkpoint_path,
+    application='lm'
+)
+
+# unilm
+model = build_transformer_model(
+    config_path=config_path,
+    checkpoint_path=checkpoint_path,
+    application='unilm'
+)
+
+```
   - <strong>2020.08.19</strong> 增加ELECTRA model,使用方法：
   ```python
 from toolkit4nlp.models import build_transformer_model
