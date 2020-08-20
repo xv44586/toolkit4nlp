@@ -588,6 +588,8 @@ def build_transformer_model(
     application = application.lower()
     if application == 'lm':
         MODEL = extend_with_language_model(MODEL)
+    elif application == 'unilm':
+        MODEL = extend_with_unilm(MODEL)
 
     transformer = MODEL(**configs)
     transformer.build(**configs)
