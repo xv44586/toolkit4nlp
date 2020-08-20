@@ -499,21 +499,57 @@ def extend_with_language_model(BaseModel):
             self.with_mlm = self.with_mlm or True  # mlm output
 
         def compute_attention_mask(self, inputs=None):
-            """重写attention mask 计算逻辑
+            """重写attention mask 计算逻辑：全局下三角矩阵，形如：
+            [[[[1, 0, 0]
+            [1, 1, 0]
+            [1, 1, 1]]]]
             """
             if self.attention_mask is None:
-
-                def compute_lm_mask(seq):
-                    seq_len = K.shape(seq)[1]
+                def compute_lm_mask(segments):
+                    seq_len = K.shape(segments)[1]
                     idx = K.arange(0, seq_len)
                     mask = idx[:, None] <= idx[None, :]
                     mask = K.cast(mask, K.floatx())
-                    return mask[:, :]
+                    return mask[None, None]
 
                 self.attention_mask = self.apply(inputs=inputs[1],
                                                  layer=Lambda,
                                                  function=compute_lm_mask,
                                                  name='Attention-LM-Mask')
+
+            return self.attention_mask
+
+
+def extend_with_unilm(BaseModel):
+    """添加UniLM mask"""
+
+    class UniLM(BaseModel):
+        """UnilM-V1: https://arxiv.org/pdf/1905.03197.pdf"""
+
+        def __init__(self, *args, **kwargs):
+            super(UniLM, self).__init__(*args, **kwargs)
+            self.with_mlm = self.with_mlm or True  # mlm output
+
+        def compute_attention_mask(self, inputs=None):
+            """重写attention mask 计算逻辑,segment 1 全部为1，segment 2 中为下三角矩阵.
+            假如 输入序列为 [CLS] [seg1] [SEP] [seg2] [SEP], 对应 mask 为：
+            [[1，1，1, 0, 0]
+            [1, 1, 1, 0, 0]
+            [1, 1, 1, 0, 0]
+            [1, 1, 1, 1, 0]
+            [1, 1, 1, 1, 1,]]
+            """
+            if self.attention_mask is None:
+                def compute_unilm_mask(segments):
+                    idx = K.cumsum(segments, axis=1)
+                    mask = idx[:, None, :] >= idx[:, :, None]
+                    mask = K.cast(mask, K.floatx())
+                    return mask[:, None]
+
+                self.attention_mask = self.apply(inputs=inputs[1],
+                                                 layer=Lambda,
+                                                 function=compute_unilm_mask,
+                                                 name='Attention-UniLM-Attention')
 
             return self.attention_mask
 
