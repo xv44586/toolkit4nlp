@@ -98,7 +98,7 @@ class MultiHeadAttention(Layer):
         # value mask
         att = sequence_masking(att, v_mask, 'add', -1)
         # attention mask
-        if a_mask:
+        if a_mask is not None:
             att = att - (1 - a_mask) * 1e12
 
         att = K.softmax(att)
