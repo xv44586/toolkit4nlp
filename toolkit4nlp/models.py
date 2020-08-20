@@ -314,7 +314,7 @@ class BERT(Transformer):
         arguments = {'a_mask': None}
         if attention_mask is not None:
             arguments['a_mask'] = True
-            arguments['a_mask'] = attention_mask
+            x.append(attention_mask)
 
         # self-attention
         x = self.apply(x,
