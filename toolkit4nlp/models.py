@@ -31,9 +31,13 @@ class Transformer(object):
                  layers=None,  # 外部传人的layer
                  name=None,  # 模型名
                  prefix=None,  # layer name 的前缀
+                 keep_tokens=None,  # 自定义保留token
                  **kwargs):
         """
         """
+        if keep_tokens is not None:
+            vocab_size = len(keep_tokens)
+
         self.vocab_size = vocab_size
         self.hidden_size = hidden_size
         self.num_hidden_layers = num_hidden_layers
@@ -52,6 +56,7 @@ class Transformer(object):
         self.layers = layers or {}
         self.name = name
         self.prefix = prefix or ''
+        self.keep_tokens = keep_tokens
         self.built = False
 
     def build(self, **kwargs):
@@ -173,6 +178,11 @@ class Transformer(object):
 
     def load_variable(self, checkpoint, name):
         return tf.train.load_variable(checkpoint, name)
+
+    def load_embeddings(self, embeddings):
+        if self.keep_tokens:
+            return embeddings[self.keep_tokens]
+        return embeddings
 
     def create_variable(self, name, value):
         return tf.Variable(initial_value=value, name=name)
@@ -400,6 +410,9 @@ class BERT(Transformer):
         variable = super(BERT, self).load_variable(checkpoint, name)
         if name == 'cls/seq_relationship/output_weights':
             return variable.T
+        elif name in ['bert/embeddings/word_embeddings',
+                      'cls/predictions/output_bias', ]:
+            return self.load_embeddings(variable)
         else:
             return variable
 
