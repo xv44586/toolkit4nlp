@@ -532,6 +532,8 @@ def extend_with_language_model(BaseModel):
 
             return self.attention_mask
 
+    return LanguageModel
+
 
 def extend_with_unilm(BaseModel):
     """添加UniLM mask"""
@@ -565,6 +567,8 @@ def extend_with_unilm(BaseModel):
                                                  name='Attention-UniLM-Attention')
 
             return self.attention_mask
+
+    return UniLM
 
 
 def build_transformer_model(
