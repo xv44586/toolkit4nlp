@@ -572,6 +572,42 @@ class ConditionalRandomField(Layer):
         return dict(list(base_config.items()) + list(config.items()))
 
 
+class Loss(Layer):
+    """
+    特殊层，用于编写灵活loss
+    """
+
+    def __init__(self, output_idx=None, **kwargs):
+        super(Loss, self).__init__(**kwargs)
+        self.output_idx = output_idx  # 输出为inputs的idx部分
+
+    def compute_loss(self, inputs):
+        raise NotImplementedError
+
+    def call(self, inputs, **kwargs):
+        loss = self.compute_loss(inputs)
+        self.add_loss(loss)
+
+        if self.output_idx is None:
+            return inputs
+
+        if type(self.output_idx) == list:
+            return [inputs[idx] for idx in self.output_idx]
+        return inputs[self.output_idx]
+
+    def compute_output_shape(self, input_shape):
+        if self.output_idx is None:
+            return input_shape
+        if type(self.output_idx) == list:
+            return [input_shape[idx] for idx in self.output_idx]
+        return input_shape[self.output_idx]
+
+    def get_config(self):
+        config = {'output_idx': self.output_idx}
+        base_config = super(Loss, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
+
+
 custom_objects = {
     'Embedding': Embedding,
     'BiasAdd': BiasAdd,
@@ -584,6 +620,7 @@ custom_objects = {
     'ConditionalRandomField': ConditionalRandomField,
     'DGCNN': DGCNN,
     'SinCosPositionEmbedding': SinCosPositionEmbedding,
+    'Loss': Loss,
 }
 
 keras.utils.get_custom_objects().update(custom_objects)
