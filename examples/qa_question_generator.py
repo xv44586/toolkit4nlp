@@ -10,6 +10,7 @@
 import json
 import numpy as np
 from tqdm import tqdm
+from collections import defaultdict
 
 from toolkit4nlp.backend import K, keras
 from toolkit4nlp.models import build_transformer_model, Model
@@ -17,6 +18,7 @@ from toolkit4nlp.layers import *
 from toolkit4nlp.tokenizers import Tokenizer, load_vocab
 from toolkit4nlp.utils import pad_sequences, DataGenerator, AutoRegressiveDecoder
 from toolkit4nlp.optimizers import Adam
+from bert4keras.layers import Loss
 from keras.callbacks import Callback
 
 # 基本信息
@@ -72,7 +74,7 @@ class data_generator(DataGenerator):
             token_ids, _ = tokenizer.encode(answer, context, maxlen=maxlen - max_question_len - 1)
             segment_ids = [0] * len(token_ids)
 
-            question_token_ids = tokenizer.encode(question)[1:]
+            question_token_ids = tokenizer.encode(question)[0][1:]
             token_ids = token_ids + question_token_ids
             segment_ids += [1] * len(question_token_ids)
 
@@ -86,23 +88,15 @@ class data_generator(DataGenerator):
 
 
 # loss 层，错位计算预测值并mask掉segment1
-class CrossEntropy(Layer):
-    def __init__(self, output_axis, *args, **kwargs):
-        super(CrossEntropy, self).__init__(self, *args, **kwargs)
-        self.output_axis = output_axis
-
-    def call(self, inputs, **kwargs):
+class CrossEntropy(Loss):
+    def compute_loss(self, inputs, mask=None):
         y_true, y_mask, y_pred = inputs
-        y_true = y_true[:, 1:]
-        y_pred = y_pred[:, :-1]
-        y_mask = y_mask[:, 1:]
+        y_true = y_true[:, 1:]  # 目标token_ids
+        y_mask = y_mask[:, 1:]  # segment_ids，刚好指示了要预测的部分
+        y_pred = y_pred[:, :-1]  # 预测序列，错开一位
         loss = K.sparse_categorical_crossentropy(y_true, y_pred)
-        loss = K.mean(loss) / K.sum(y_mask)
-        self.add_loss(loss)
-        return inputs[2]
-
-    def compute_output_shape(self, input_shape):
-        return self.input_shape[self.output_axis]
+        loss = K.sum(loss * y_mask) / K.sum(y_mask)
+        return loss
 
 
 # build model
@@ -123,7 +117,6 @@ model.summary()
 class QuestionGenerator(AutoRegressiveDecoder):
     """seq2seq解码器
     """
-
     @AutoRegressiveDecoder.wraps('probas')
     def predict(self, inputs, output_ids, states):
         token_ids, segment_ids = inputs
@@ -132,23 +125,33 @@ class QuestionGenerator(AutoRegressiveDecoder):
         ret = model.predict([token_ids, segment_ids])[:, -1]
         return ret
 
-    def generate(self, context, answer, topk=2):
+    def generate(self, context, answer, topk=2, random=False):
         max_q_len = maxlen - self.maxlen - 1
         token_ids, _ = tokenizer.encode(context, answer, maxlen=max_q_len)
         segment_ids = [0] * len(token_ids)
-        output_ids = self.beam_search([token_ids, segment_ids],
-                                      topk)  # 基于beam search
-        return tokenizer.decode(output_ids)
+        # 确定解码，用于评估模型
+        if not random:
+            output_ids = self.beam_search([token_ids, segment_ids], topk)  # 基于beam search
+            return tokenizer.decode(output_ids)
+        # 随机解码，用于生成新的question
+        output_ids = self.random_sample(inputs=[token_ids, segment_ids], n=3, topk=3, topp=0.9)
+        return [tokenizer.decode(ids) for ids in output_ids]
 
 
 question_generator = QuestionGenerator(start_id=None, end_id=tokenizer._token_end_id, maxlen=32)
 
 
 def extract_question(context, answer):
-    """抽取答案函数
+    """生成确定性问题函数
     """
-    answer = question_generator.generate(context, answer)
-    return answer
+    question = question_generator.generate(context, answer)
+    return question
+
+
+def generate_question(context, answer):
+    """生成多样化问题"""
+    questions = question_generator.generate(context, answer, random=True)
+    return questions
 
 
 def evaluate(valid_data):
@@ -202,5 +205,34 @@ if __name__ == '__main__':
         steps_per_epoch=len(train_generator),
         epochs=epochs,
         callbacks=[evaluator])
+
+    # generate new questions
+    model.load_weights('best_model.weights')
+    new_train_data = []
+    tem = defaultdict(list)
+    for d in tqdm(train_data):
+        qas = []
+        _id, context, question, answers = d
+        new_questions = [question]
+        for answer in answers:
+            g_questions = generate_question(context, answer)
+            g_questions = [q for q in set(g_questions) if q not in new_questions]
+            new_questions.extend(g_questions)
+        answers = [{'text': a} for a in answers]
+        for q in new_questions:
+            qa = {'id': _id, 'question': q, 'answers': answers}
+            qas.append(qa)
+
+        tem[context].extend(qas)
+
+    paragraphs = []
+    for c, qas in tem.items():
+        paragraphs.append({'context': c, 'qas': qas})
+
+    data = {'data': [{'paragraphs': paragraphs}]}
+
+    with open('/home/mingming.xu/datasets/NLP/qa/dureader_robust-data/new_train.json', 'w') as f:
+        json.dump(data, f)
+
 else:
     model.load_weights('best_model.weights')
