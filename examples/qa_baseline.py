@@ -73,30 +73,14 @@ class data_generator(DataGenerator):
     """数据生成器
     """
 
-    def random_generator(self, s):
-        l = maxlen // 2 + maxlen % 2
-
-        if len(s) > l:
-            p = np.random.random()
-            if p > 0.5:
-                #                 i = np.random.randint(len(s) - l +1)
-                #                 j = np.random.randint(l + i, min(len(s), maxlen) + 1)
-                i = np.random.randint(len(s) - l + 1)
-                j = np.random.randint(l + i, min(len(s), i + maxlen) + 1)
-
-                return s[i:j]
-            else:
-
-                return s[: maxlen]
-        else:
-            return s
-
     def __iter__(self, random=False):
         batch_token_ids, batch_segment_ids, batch_labels = [], [], []
         for is_end, item in self.get_sample():
-            context, question, answers = item[1:]
-
-            context = self.random_generator(context)
+            context, questions, answers = item[1:]
+            if type(questions) != list:
+                question = questions
+            else:
+                question = questions[0] if np.random.random()> 0.5 else np.random.choice(questions)
 
             token_ids, segment_ids = tokenizer.encode(question, context, maxlen=maxlen)
             a = np.random.choice(answers)
@@ -170,6 +154,7 @@ model.compile(
     metrics=[sparse_accuracy]
 )
 
+
 def extract_answer(question, context, max_a_len=16):
     """抽取答案函数
     """
@@ -224,6 +209,7 @@ def evaluate(filename):
 class Evaluator(keras.callbacks.Callback):
     """评估和保存模型
     """
+
     def __init__(self):
         self.best_val_f1 = 0.
 
@@ -238,7 +224,7 @@ class Evaluator(keras.callbacks.Callback):
         print(metrics)
 
 
-if __name__ =='__main__':
+if __name__ == '__main__':
     train_generator = data_generator(train_data, batch_size)
     evaluator = Evaluator()
 
