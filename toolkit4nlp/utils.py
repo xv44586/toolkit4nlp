@@ -360,3 +360,23 @@ class ViterbiDecoder(object):
             paths = np.concatenate([paths[max_idx, :], labels], axis=-1)
 
         return paths[score[:, 0].argmax(), :]
+
+def text_segmentate(text, maxlen,seps='\n', strips=None):
+    """过滤strips，按照seps顺序切分句子为若干个短句子"""
+    text = text.strip().strip(strips)
+    if seps and len(text) > maxlen:
+        pieces = text.split(seps[0])
+        text, texts = '', []
+        for i, p in enumerate(pieces):
+            if text and p and len(text) + len(p) > maxlen - 1:
+                texts.extend(text_segmentate(text, maxlen, seps[1:], strips))
+                text = ''
+            if i + 1 == len(pieces):
+                text = text + p
+            else:
+                text = text + p + seps[0]
+        if text:
+            texts.extend(text_segmentate(text, maxlen, seps[1:], strips))
+        return texts
+    else:
+        return [text]
