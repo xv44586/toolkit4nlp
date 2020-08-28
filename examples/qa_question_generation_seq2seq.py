@@ -286,9 +286,9 @@ if __name__ == '__main__':
     evaluator = Evaluator()
 
     train_model.fit_generator(train_generator.generator(),
-                       steps_per_epoch=len(train_generator),
-                       epochs=epochs,
-                       callbacks=[evaluator])
+                              steps_per_epoch=len(train_generator),
+                              epochs=epochs,
+                              callbacks=[evaluator])
 
     # generate new questions
     file_name = '/home/mingming.xu/datasets/NLP/qa/dureader_robust-data/train_random.json'
