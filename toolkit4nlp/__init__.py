@@ -4,4 +4,4 @@
 # @Email   : mingming.xu@zhaopin.com
 # @File    : __init__.py.py
 
-__version__ = '0.2.5'
+__version__ = '0.2.6'
