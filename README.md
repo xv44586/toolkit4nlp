@@ -4,7 +4,7 @@
  为了方便自己学习与理解一些东西，实现一些自己的想法
 
 ## Update info:
-  - <strong>2020.08.24</strong> 增加UniLM做question generation example，具体代码：<a href="https://github.com/xv44586/toolkit4nlp/blob/master/examples/qa_question_answer_generation_seq2seq.py">qa question answer generation</a>
+  - <strong>2020.08.24</strong> 增加UniLM做question answer generation example，具体代码：<a href="https://github.com/xv44586/toolkit4nlp/blob/master/examples/qa_question_answer_generation_seq2seq.py">qa question answer generation</a>
   - <strong>2020.08.20</strong> 增加UniLM做question generation example，具体代码：<a href="https://github.com/xv44586/toolkit4nlp/blob/master/examples/qa_question_generation_seq2seq.py">qa question generation</a>
   - <strong>2020.08.20</strong> 增加UniLM和LM model，使用方法：
   ```python
