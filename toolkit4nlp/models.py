@@ -369,15 +369,20 @@ class BERT(Transformer):
         outputs = [x]
         if self.with_pool:
             # pooler 提取cls向量
-            x = self.apply(x, layer=Lambda, layer_name='Pooler', function=lambda x: x[:, 0])
-            x = self.apply(x, Dense,
-                           'Pooler-Dense',
+            x = self.apply(x, layer=Lambda, name='Pooler', function=lambda x: x[:, 0])
+            x = self.apply(x,
+                           layer=Dense,
+                           name='Pooler-Dense',
                            units=self.hidden_size,
                            activation='tanh',
                            kernel_initializer=self.initializer)
             if self.with_nsp:
                 # Next sentence prediction
-                x = self.apply(x, Dense, 'NSP-Proba', units=2, activation='softmax',
+                x = self.apply(x,
+                               layer=Dense,
+                               name='NSP-Proba',
+                               units=2,
+                               activation='softmax',
                                kernel_initializer=self.initializer)
 
             outputs.append(x)
@@ -385,8 +390,12 @@ class BERT(Transformer):
         if self.with_mlm:
             # Mask language model, Dense --> Norm --> Embedding --> Biasadd --> softmax
             x = outputs[0]
-            x = self.apply(x, Dense, 'MLM-Dense', units=self.embedding_size,
-                           activation=self.hidden_act, kernel_initializer=self.initializer)
+            x = self.apply(x,
+                           layer=Dense,
+                           name='MLM-Dense',
+                           units=self.embedding_size,
+                           activation=self.hidden_act,
+                           kernel_initializer=self.initializer)
             x = self.apply(x,
                            LayerNormalization,
                            'MLM-Norm',
