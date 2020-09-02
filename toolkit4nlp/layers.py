@@ -365,14 +365,14 @@ class DGCNN(Layer):
     ref: https://spaces.ac.cn/archives/5409
     """
 
-    def __init__(self, o_dim=None, k_size=3, dilation_rate=1, skip_connection=True, drop_rate=None, **kwargs):
+    def __init__(self, o_dim=None, k_size=3, dilation_rate=1, skip_connection=True, dropout_rate=None, **kwargs):
         super(DGCNN, self).__init__(**kwargs)
 
         self.o_dim = o_dim
         self.k_size = k_size
         self.dilation_rate = dilation_rate
         self.skip_connection = skip_connection
-        self.drop_rate = drop_rate
+        self.dropout_rate = dropout_rate
 
     def build(self, input_shape):
         super(DGCNN, self).build(input_shape)
@@ -388,7 +388,7 @@ class DGCNN(Layer):
         if self.skip_connection and self.o_dim != input_shape[-1]:
             self.conv1d_1x1 = Conv1D(self.o_dim, 1)
 
-    def call(self, x, mask):
+    def call(self, x, mask=None):
         x0 = x
         if mask is not None:
             mask = K.cast(mask, K.floatx())
@@ -397,8 +397,8 @@ class DGCNN(Layer):
         x0 = Lambda(lambda x_: x_, output_shape=lambda s: s)(x0)  # drop mask so do not put mask to conv1d
         x = self.conv1d(x0)
         x, g = x[:, :, :self.o_dim], x[:, :, self.o_dim:]
-        if self.drop_rate is not None:
-            g = K.in_train_phase(K.dropout(g, self.drop_rate), g)
+        if self.dropout_rate is not None:
+            g = K.in_train_phase(K.dropout(g, self.dropout_rate), g)
         g = K.sigmoid(g)
         if self.skip_connection:
             if K.int_shape(x0)[-1] != self.o_dim:
