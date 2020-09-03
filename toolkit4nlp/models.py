@@ -510,6 +510,73 @@ class ELECTRA(BERT):
         return inputs
 
 
+class DBERT(BERT):
+    """
+    用连续的dgcnn来替换原始bert中的transformer block，来尝试压缩bert
+    """
+
+    def __init__(self, inner_hidden_size=None, **kwargs):
+        prefix = kwargs.get('prefix', 'DBERT-')
+        kwargs['prefix'] = prefix
+        super(DBERT, self).__init__(**kwargs)
+        self.inner_hidden_size = inner_hidden_size or self.attention_head_size  # dgcnn hidden dim
+
+    def apply_attention_layers(self, inputs, idx):
+        """
+            liner_in(inner_hid_dim) -> dgcnn(1) -> dgcnn(3) -> dgcnn(5) -> dgcnn(8) -> liner_out(hid_dim)
+        """
+        block_name = 'DBlock-%d-MultiDGCNN' % idx
+        liner_in_name = 'DBlock-%d-MultiDGCNN-LinerIn' % idx
+        liner_out_name = 'DBlock-%d-MultiDGCNN-LinerOut' % idx
+        attention_mask = self.compute_attention_mask(idx)
+        x = inputs
+        x = self.apply(x,
+                       Dense,
+                       name=liner_in_name,
+                       units=self.inner_hidden_size,
+                       use_bias=False
+                       )
+        arguments = {}
+        if attention_mask is not None:
+            x.append(attention_mask)
+
+        # dgcnn-block
+        x = self.apply(x,
+                       DGCNN,
+                       name='{block_name}-DilationRate-{r}'.format(block_name=block_name, r=1),
+                       dilation_rate=1,
+                       dropout_rate=self.dropout_rate,
+                       arguments=arguments)
+
+        x = self.apply(x,
+                       DGCNN,
+                       name='{block_name}-DilationRate-{r}'.format(block_name=block_name, r=3),
+                       dilation_rate=3,
+                       dropout_rate=self.dropout_rate,
+                       arguments=arguments)
+        x = self.apply(x,
+                       DGCNN,
+                       name='{block_name}-DilationRate-{r}'.format(block_name=block_name, r=5),
+                       dilation_rate=5,
+                       dropout_rate=self.dropout_rate,
+                       arguments=arguments)
+        x = self.apply(x,
+                       DGCNN,
+                       name='{block_name}-DilationRate-{r}'.format(block_name=block_name, r=8),
+                       dilation_rate=8,
+                       dropout_rate=self.dropout_rate,
+                       arguments=arguments)
+
+        x = self.apply(x,
+                       Dense,
+                       name=liner_out_name,
+                       units=self.hidden_size,
+                       use_bias=False
+                       )
+        x = self.apply(x, LayerNormalization, name='DBlock-%d-MultiDGCNN-Norm' % idx)
+        return x
+
+
 def extend_with_language_model(BaseModel):
     """
     增加下三角mask矩阵，作为语言模型使用
