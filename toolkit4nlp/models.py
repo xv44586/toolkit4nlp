@@ -670,6 +670,7 @@ def build_transformer_model(
     models = {
         'bert': BERT,
         'electra': ELECTRA,
+        'dbert': DBERT
     }
 
     if isinstance(model, six.string_types):
