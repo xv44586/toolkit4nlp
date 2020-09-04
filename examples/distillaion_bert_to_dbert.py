@@ -188,19 +188,19 @@ class Evaluator(keras.callbacks.Callback):
         )
 
 
-bert = build_transformer_model(
+teacher = build_transformer_model(
     config_path,
     checkpoint_path,
     return_keras_model=False
 )
 
-x_in = Input(shape=K.int_shape(bert.output)[1:])
+x_in = Input(shape=K.int_shape(teacher.output)[1:])
 x = Lambda(lambda x: x)(x_in)
 # softmax
 x = Dense(num_labels, activation='softmax')(x)
-bert_classifier = Model(x_in, x)
+teacher_classifier = Model(x_in, x)
 
-teacher_model = Model(bert.input, bert_classifier(bert.output))
+teacher_model = Model(teacher.input, teacher_classifier(teacher.output))
 teacher_model.summary()
 
 teacher_model.compile(
@@ -209,6 +209,97 @@ teacher_model.compile(
     metrics=['sparse_categorical_accuracy']
 )
 
+student = build_transformer_model(
+    config_path,
+    checkpoint_path,
+    model='dbert',
+    return_keras_model=False,
+    prefix='Dbert-'
+)
+x_in = Input(shape=K.int_shape(student.output)[1:])
+x = Lambda(lambda x: x)(x_in)
+# softmax
+x = Dense(num_labels, activation='softmax')(x)
+student_classifier = Model(x_in, x)
+
+student_model = Model(student.inputs, student_classifier(student.output))
+student_model.summary()
+
+
+# collect loss
+class CollectLoss(Layer):
+    """CE/MSE/KLD
+    CE:  T 平滑后的logits之间的交叉熵
+    MSE：原始logits之间的MSE
+    KLD: T 平滑后的logits之间的KL Distance
+    """
+
+    def __init__(self, temperature=2, **kwargs):
+        super(CollectLoss, self).__init__(**kwargs)
+        self.supports_masking = True
+        self.temperature = temperature
+
+    def compute_mask(self, inputs, mask=None):
+        if mask is not None:
+            return mask[1]
+
+    def cal_mse(self, inputs):
+        source, target = inputs
+        mse = K.mean(K.square(source - target))
+        return mse
+
+    def cal_ce(self, inputs):
+        source, target = inputs
+        source_t = K.softmax(source / self.temperature)
+        target_t = K.softmax(target / self.temperature)
+        ce = K.categorical_crossentropy(source_t, target_t)
+        return ce
+
+    def cal_kld(self, inputs):
+        pass
+
+    def call(self, inputs):
+        mse = self.cal_mse(inputs)
+        ce = self.cal_ce(inputs)
+        self.add_loss(mse)
+        self.add_loss(ce)
+
+        return inputs
+
+    def compute_output_shape(self, input_shape):
+        return input_shape
+
+
+def tranfer(teacher, student, teacher_classifier, student_classifier):
+    """bert of theseus：固定住 predecessor 和 classifier，随机替换， predecessor中的block为successor对应层来训练successor
+    """
+    inputs = teacher.inputs
+    # 固定住已经训练好的层
+    for layer in teacher.model.layers:
+        layer.trainable = False
+    teacher_classifier.trainable = False
+    # Embedding层替换
+    teacher_outputs = teacher.apply_embeddings(inputs)
+    student_outputs = student.apply_embeddings(inputs)
+    outputs = CollectLoss()([teacher_outputs, student_outputs])
+    # Transformer层替换
+    layers_per_module = teacher.num_hidden_layers // student.num_hidden_layers
+    for index in range(student.num_hidden_layers):
+        teacher_outputs = outputs[0]
+        for sub_index in range(layers_per_module):
+            teacher_outputs = teacher.apply_attention_layers(
+                teacher_outputs, layers_per_module * index + sub_index
+            )
+        student_outputs = student.apply_attention_layers(outputs[1], index)
+        outputs = CollectLoss(1 * index / student.num_hidden_layers)([teacher_outputs, student_outputs])
+    # 返回模型
+    outputs = student_classifier(outputs[1])
+    model = Model(inputs, outputs)
+    return model
+
+
+student_train_model = tranfer(teacher, student, teacher_classifier, student_classifier)
+student_train_model.summary()
 
 if __name__ == '__main__':
     teacher_model_name = './best_teacher_model.weights'
