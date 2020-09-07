@@ -18,7 +18,7 @@ from toolkit4nlp.models import build_transformer_model, Model
 from toolkit4nlp.tokenizers import Tokenizer
 from toolkit4nlp.optimizers import Adam
 from toolkit4nlp.utils import pad_sequences, DataGenerator
-from bert4keras.layers import *
+from toolkit4nlp.layers import *
 
 K.clear_session()
 # 基本信息
