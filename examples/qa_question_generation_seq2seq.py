@@ -19,7 +19,7 @@ from toolkit4nlp.layers import *
 from toolkit4nlp.tokenizers import Tokenizer, load_vocab
 from toolkit4nlp.utils import pad_sequences, DataGenerator, AutoRegressiveDecoder
 from toolkit4nlp.optimizers import Adam
-from bert4keras.layers import Loss
+from toolkit4nlp.layers import Loss
 from keras.callbacks import Callback
 
 # 基本信息

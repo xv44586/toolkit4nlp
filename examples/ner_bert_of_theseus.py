@@ -16,12 +16,11 @@ os.environ['TF_KERAS'] = '1'
 import json
 from tqdm import tqdm
 import numpy as np
-from bert4keras.backend import keras, K
-from bert4keras.tokenizers import Tokenizer
-from bert4keras.models import build_transformer_model
-from bert4keras.optimizers import Adam, extend_with_piecewise_linear_lr
-from bert4keras.snippets import sequence_padding, DataGenerator, ViterbiDecoder
-from bert4keras.snippets import open
+from toolkit4nlp.backend import keras, K
+from toolkit4nlp.tokenizers import Tokenizer
+from toolkit4nlp.models import build_transformer_model
+from toolkit4nlp.optimizers import Adam, extend_with_piecewise_linear_lr
+from toolkit4nlp.utils import pad_sequences, DataGenerator, ViterbiDecoder
 from keras.layers import Input, Lambda, Dense, Layer
 from keras.models import Model
 
@@ -107,9 +106,9 @@ class data_generator(DataGenerator):
             batch_segment_ids.append(segment_ids)
             batch_labels.append(labels)
             if len(batch_token_ids) == self.batch_size or is_end:
-                batch_token_ids = sequence_padding(batch_token_ids)
-                batch_segment_ids = sequence_padding(batch_segment_ids)
-                batch_labels = sequence_padding(batch_labels)
+                batch_token_ids = pad_sequences(batch_token_ids)
+                batch_segment_ids = pad_sequences(batch_segment_ids)
+                batch_labels = pad_sequences(batch_labels)
                 # batch_labels = np.expand_dims(batch_labels, -1)
                 yield [batch_token_ids, batch_segment_ids], batch_labels
                 batch_token_ids, batch_segment_ids, batch_labels = [], [], []
