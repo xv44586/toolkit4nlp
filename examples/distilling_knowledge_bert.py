@@ -190,6 +190,15 @@ student_train = Model(student.inputs, [s_soften, s_logits_t])
 
 student_train.summary()
 
+
+def normal_noise(label, scale=0.1):
+    # add normal noise to create a fake soften labels
+    normal_noise = np.random.normal(scale=scale, size=(num_classes,))
+    new_label = label + normal_noise
+    new_label = K.softmax(new_label / Temperature).numpy()
+    return new_label
+
+
 if __name__ == '__main__':
     # train teacher model
     teacher_evaluator = Evaluator('best_teacher.weights')
@@ -214,22 +223,25 @@ if __name__ == '__main__':
     y_logits = K.softmax(y_train_logits / Temperature).numpy()
     new_y_train = np.concatenate([y_train, y_logits], axis=-1)
 
-    # check soften labels accuracy
-    if_correct = new_y_train[:, :num_classes].argmax(axis=-1) == new_y_train[:, num_classes:].argmax(axis=-1)
-    if_correct = if_correct.tolist()
-    correct = [correct for correct in if_correct if correct]
-    print('soften labels acc is: ', float(len(correct)) / len(if_correct))
+    # create normal noise fake soften labels datasets
+    # new_data = [[d[0], d[1], normal_noise(d[1])] for d in train_data]
+    # student_data_generator = StudentDataGenerator(new_data, batch_size)
 
     # create new datasets
     new_data = [[d[0], d[1], y_train_logits[i].tolist()] for i, d in enumerate(train_data)]
     student_data_generator = StudentDataGenerator(new_data, batch_size)
+
+    # check soften labels accuracy
+    if_correct = [np.array(d[1]).argmax() == np.array(d[2]).argmax() for d in new_data]
+    correct = [t for t in if_correct if t]
+    print('soften labels acc is: ', float(len(correct)) / len(if_correct))
 
     # train student model
     student_evaluator = Evaluator('best_student_train.weights', student_model)
     student_train.compile(loss=['categorical_crossentropy', kullback_leibler_divergence],
                           optimizer=Adam(2e-5),
                           metrics=['acc'],
-                          loss_weights=[1, 1. / (Temperature ** 2)]  # 平滑 kld
+                          loss_weights=[1, Temperature ** 2]  # 放大 kld
                           )
     student_train.fit_generator(
         student_data_generator.generator(),
