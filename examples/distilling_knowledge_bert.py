@@ -10,8 +10,9 @@
 
 实验：中文文本分类
 数据集：IFLYTEK' 长文本分类 (https://github.com/CLUEbenchmark/CLUE)
-bert-12: 0.6
-student-3: 0.602
+bert-12: 60.21%
+student-3: 60.14%
+student-3-self-kd: 59.6%
 
 ref: [Distilling the Knowledge in a Neural Network](http://arxiv.org/abs/1503.02531)
 """
@@ -32,9 +33,9 @@ from keras.metrics import categorical_accuracy
 from keras.losses import kullback_leibler_divergence
 
 num_classes = 119
-maxlen = 256
-batch_size = 16
-Temperature = 2  # 平滑soften labels 分布，越大越平滑，一般取值[1, 10]
+maxlen = 128
+batch_size = 32
+Temperature = 3  # 平滑soften labels 分布，越大越平滑，一般取值[1, 10]
 
 # BERT base
 config_path = '/home/mingming.xu/pretrain/NLP/chinese_L-12_H-768_A-12/bert_config.json'
@@ -220,8 +221,8 @@ if __name__ == '__main__':
 
     y_train_logits = np.concatenate(y_train_logits)
     y_train = np.concatenate(y_train)
-    y_logits = K.softmax(y_train_logits / Temperature).numpy()
-    new_y_train = np.concatenate([y_train, y_logits], axis=-1)
+    y_soften = K.softmax(y_train_logits / Temperature).numpy()
+    new_y_train = np.concatenate([y_train, y_soften], axis=-1)
 
     # create normal noise fake soften labels datasets
     # new_data = [[d[0], d[1], normal_noise(d[1])] for d in train_data]
@@ -246,7 +247,7 @@ if __name__ == '__main__':
     student_train.fit_generator(
         student_data_generator.generator(),
         steps_per_epoch=len(student_data_generator),
-        epochs=5,
+        epochs=10,
         callbacks=[student_evaluator]
     )
 else:
