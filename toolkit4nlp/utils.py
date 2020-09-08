@@ -228,13 +228,12 @@ class DataGenerator(object):
     cifar10_generate = (file_names_with_label, batch_size=32, shuffle=True)
     """
 
-    def __init__(self, data, batch_size=32, shuffle=True, buffer_size=None):
+    def __init__(self, data, batch_size=32, buffer_size=None):
         """
         样本迭代器
         """
         self.data = data
         self.batch_size = batch_size
-        self.shuffle = shuffle
         if hasattr(data, '__len__'):
             self.steps = int(np.ceil(len(data) / float(batch_size)))
         else:
@@ -244,11 +243,11 @@ class DataGenerator(object):
     def __len__(self):
         return self.steps
 
-    def get_sample(self):
+    def get_sample(self, shuffle=False):
         """
         gets one sample data with a flag of is this data is the last one
         """
-        if self.shuffle:
+        if shuffle:
             if self.steps is None:
                 def generator():
                     cache, buffer_full = [], False
@@ -282,14 +281,14 @@ class DataGenerator(object):
         yield True, current_data
 
     @abstractmethod
-    def __iter__(self):
+    def __iter__(self, shuffle=False):
         """ 处理单个样本并构造batch data
         """
         raise NotImplementedError
 
     def generator(self):
         while True:
-            for d in self.__iter__():
+            for d in self.__iter__(shuffle=True):
                 yield d
 
     def take(self, nums=1):
