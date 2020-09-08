@@ -5,8 +5,8 @@
 # @File    : classification_ifytek_bert_of_theseus.py
 # ! -*- coding:utf-8 -*-
 """
-bert of theseus 在文本分类下的模型压缩
 bert-of-theseus 方法在文本分类例子下的模型压缩
+数据集：IFLYTEK' 长文本分类 (https://github.com/CLUEbenchmark/CLUE)
 bert-12: 0.607
 bert-3: 0.579
 bert-6: 0.591
