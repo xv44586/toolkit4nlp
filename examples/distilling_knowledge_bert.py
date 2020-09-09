@@ -13,6 +13,7 @@
 bert-12: 60.21%
 student-3: 60.14%
 student-3-self-kd: 59.6%
+teacher-12-self-kd:61.07%
 
 ref: [Distilling the Knowledge in a Neural Network](http://arxiv.org/abs/1503.02531)
 """
