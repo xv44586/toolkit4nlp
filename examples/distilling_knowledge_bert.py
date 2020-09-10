@@ -15,7 +15,11 @@ student-3: 60.14%
 student-3-self-kd: 59.6%
 teacher-12-self-kd:61.07%
 
-ref: [Distilling the Knowledge in a Neural Network](http://arxiv.org/abs/1503.02531)
+ref:
+  - [Distilling the Knowledge in a Neural Network](http://arxiv.org/abs/1503.02531)
+  - [Distilling Task-Specific Knowledge from BERT into Simple Neural Networks](http://arxiv.org/abs/1903.12136)
+  - [TinyBERT: Distilling BERT for Natural Language Understanding](http://arxiv.org/abs/1909.10351)
+  - [DistilBERT, a distilled version of BERT: smaller, faster, cheaper and lighter](http://arxiv.org/abs/1910.01108)
 """
 
 import json
