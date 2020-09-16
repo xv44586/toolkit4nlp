@@ -138,7 +138,7 @@ model = build_transformer_model(
     checkpoint_path,
 )
 output = Lambda(lambda x: x[:, 0])(model.output)
-output = DenseSimLoss(scale=0.5, units=num_classes, activation='softmax')(output)
+output = DenseSimLoss(scale=1, units=num_classes, activation='softmax')(output)
 model = Model(model.inputs, output)
 model.summary()
 
