@@ -11,9 +11,13 @@
 实验：中文文本分类
 数据集：IFLYTEK' 长文本分类 (https://github.com/CLUEbenchmark/CLUE)
 bert-12: 60.21%
-student-3: 60.14%
+student-3: 58.14%
+teacher-student:60.14%
 student-3-self-kd: 59.6%
 teacher-12-self-kd:61.07%
+normal-noise-bert-3:58.4%
+
+blog: [distilling knowledge of bert](https://xv44586.github.io/2020/08/31/bert-01/)
 
 ref:
   - [Distilling the Knowledge in a Neural Network](http://arxiv.org/abs/1503.02531)
