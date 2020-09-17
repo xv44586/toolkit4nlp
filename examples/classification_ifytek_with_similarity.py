@@ -7,6 +7,8 @@
 利用label description 信息，来增加一个similarity 任务。
 具体：对每个样本后面，新增一条由label description 为text， label id为target的新样本，希望每个样本除了学习对应的target外，
 样本与 对应label description 样本的similarity 尽可能的高于同一个batch 内的其他样本。
+
+best val acc: 55.4%
 """
 
 import json
