@@ -3,8 +3,21 @@
 # @Author  : mingming.xu
 # @Email   : mingming.xu@zhaopin.com
 # @File    : classification_ifytek_fastbert.py
+"""
+借鉴fastbert 的思想：对不同样本选择不同的Transformer 层进行预测，来达到提前结束计算，加速推理。
+实验时发现，由于没有大量unlabel data，只利用Teacher model outputs进行迁移，效果非常差，所以选择迁移时对每个
+branch classifier 也迁移ground truth，同时通过简单的句子重复与打散来进行数据增强。
+
+**注意**：由于实验中使用的K.switch 并不是lazier semantics,所以并不能真正达到跳过计算，而由于增加了分支结果的判断，
+所以实际上比Teacher model推理更慢，如果有更好的方式，请issue
+
+ref: [FastBERT](http://arxiv.org/abs/2004.02178)
+"""
+
+
 import json
 from tqdm import tqdm
+import re
 
 import numpy as np
 from toolkit4nlp.backend import keras, K
@@ -21,7 +34,8 @@ from keras.losses import kullback_leibler_divergence
 num_classes = 119
 maxlen = 128
 batch_size = 32
-max_label = 7
+num_hidden_layers = 6
+speed = 0.1  # uncertainty阈值
 # BERT base
 config_path = '/home/mingming.xu/pretrain/NLP/chinese_L-12_H-768_A-12/bert_config.json'
 checkpoint_path = '/home/mingming.xu/pretrain/NLP/chinese_L-12_H-768_A-12/bert_model.ckpt'
@@ -56,16 +70,20 @@ tokenizer = Tokenizer(token_dict, do_lower_case=True)
 
 
 class data_generator(DataGenerator):
-    """数据生成器
+    """迁移时由于没有额外的label data，所以通过data augmentation 来模拟。
+    方法是切分句子后重复后shuffle再重新组成新的句子
     """
 
-    def __init__(self, has_label=True, **kwargs):
+    def __init__(self, data_augmentation=False, transfer=False, **kwargs):
         super(data_generator, self).__init__(**kwargs)
-        self.has_label = has_label
+        self.data_augmentation = data_augmentation
+        self.transfer = transfer
 
     def __iter__(self, random=False):
         batch_token_ids, batch_segment_ids, batch_labels = [], [], []
         for is_end, (text, label, label_des) in self.get_sample():
+            if self.data_augmentation:
+                text = self.generate_text(text)
             token_ids, segment_ids = tokenizer.encode(text, maxlen=maxlen)
 
             batch_token_ids.append(token_ids)
@@ -75,38 +93,32 @@ class data_generator(DataGenerator):
                 batch_token_ids = pad_sequences(batch_token_ids)
                 batch_segment_ids = pad_sequences(batch_segment_ids)
                 batch_labels = pad_sequences(batch_labels)
-                if self.has_label:
+                if not self.transfer:
                     yield [batch_token_ids, batch_segment_ids], batch_labels
                 else:
-                    yield [batch_token_ids, batch_segment_ids], None
+                    yield [batch_token_ids, batch_segment_ids] + [batch_labels], None
                 batch_token_ids, batch_segment_ids, batch_labels = [], [], []
+
+    def generate_text(self, text):
+        pat = '[,.?!，。？！；;]+'
+        sentences = re.split(pat, text)
+        sentences = sentences * 2
+        np.random.shuffle(sentences)
+        return '。'.join(sentences)
 
 
 # 转换数据集
 train_generator = data_generator(data=train_data, batch_size=batch_size)
 valid_generator = data_generator(data=valid_data, batch_size=batch_size)
-train_no_label_generator = data_generator(data=train_data, batch_size=batch_size, has_label=False)
-
-
-def evaluate(data, model):
-    total, right = 0., 0.
-    for x_true, y_true in tqdm(data):
-        y_pred = model.predict(x_true)[:, :num_classes].argmax(axis=1)
-        if y_true.shape[1] > 1:
-            y_true = y_true[:, :num_classes].argmax(axis=-1)
-        else:
-            y_true = y_true[:, 0]
-        total += len(y_true)
-        right += (y_true == y_pred).sum()
-    return right / total
-
+train_transfer_generator = data_generator(data=train_data,
+                                          batch_size=batch_size, transfer=True, data_augmentation=True)
 
 # 加载预训练模型（3层）
 teacher = build_transformer_model(
     config_path=config_path,
     checkpoint_path=checkpoint_path,
     return_keras_model=False,
-    num_hidden_layers=3,
+    num_hidden_layers=num_hidden_layers,
     model='bert'
 )
 
@@ -127,9 +139,12 @@ teacher_model.summary()
 
 
 class FastbertClassifierLayer(Layer):
+    """FastBert 中用来做分类的层，为了增加分类层的性能，同时参数不能太大，所以作者选择了一个hidden size
+    更小的transformer
+    """
+
     def __init__(self, labels_num, hidden_size=128, head_nums=2, head_size=64, pooling=None, **kwargs):
         super(FastbertClassifierLayer, self).__init__(**kwargs)
-        #         self.idx = idx
         self.labels_num = labels_num
         self.hidden_size = hidden_size
         self.head_nums = head_nums
@@ -161,70 +176,166 @@ class FastbertClassifierLayer(Layer):
         return x
 
     def compute_output_shape(self, input_shape):
-        return input_shape[:] + (self.labels_num,)
+        return input_shape[:1] + (self.labels_num,)
 
 
-def normal_shannon_entropy(p, labels_num):
+def normal_shannon_entropy(p, labels_num=num_classes):
     # normalized entropy
     p = K.cast(p, K.floatx())
     norm = K.log(1. / labels_num)
-    s = K.sum(p * K.log(p))
+    s = K.sum(p * K.log(p), axis=-1, keepdims=True)
     return s / norm
 
 
-def fastbert(teacher, classifier, speed=0.1):
+class SwitchTwo(Layer):
+    """通过classifier 的结果，来选择是否跳过下一层计算
+    **注意**：由于tf.cond 对function中含有任意tensor/operation 时，两个function都会执行，
+    所以这里并没有达到 “跳过”的逻辑，暂时没找到更好的方式来实现。
+    关于tf.cond，请参考：
+    [control_flow_ops.py](https://github.com/tensorflow/tensorflow/blob/master/tensorflow/python/ops/control_flow_ops.py#L1105)
+
+    """
+
+    def __init__(self, speed=0.1, *args, **kwargs):
+        super(SwitchTwo, self).__init__(*args, **kwargs)
+        self.supports_masking = True
+        self.speed = K.constant(speed, dtype=float)
+
+    def compute_mask(self, inputs, mask=None):
+        if mask is not None:
+            return mask[-1]
+
+    def compute_output_shape(self, input_shape):
+        return input_shape[-1]
+
+    def call(self, inputs):
+        clf, x_pre, x_next = inputs
+        uncertain = normal_shannon_entropy(clf, num_classes)
+        cond = K.greater(self.speed, uncertain)
+        x = K.switch(cond, x_pre, x_next)
+        return K.in_train_phase(x_next, x)
+
+
+def fastbert(teacher, classifier, speed=speed):
     inputs = teacher.inputs
     # frozen layers
     for layer in teacher.model.layers:
         layer.trainable = False
     classifier.trainable = False
 
-    x = teacher.apply_embeddings(inputs)
-    first_name = 'FastBert-0'
-    clf_prob = teacher.apply(x, FastbertClassifierLayer, name=first_name, labels_num=num_classes)
-    x = (clf_prob, x)
-    student_outputs = [clf_prob]
+    x_pre = teacher.apply_embeddings(inputs)
+    emb_name = 'FastBert-embedding'
+    clf_pre = teacher.apply(x_pre, FastbertClassifierLayer, name=emb_name, labels_num=num_classes)
+    student_outputs = [clf_pre]
+    outputs = [clf_pre, x_pre]
 
     for idx in range(teacher.num_hidden_layers):
-        clf_prob, x = x
+        clf_pre, x_pre = outputs
         name = 'FastBert-%d' % idx
-        x = teacher.apply_attention_layers(x, idx)
-        clf_prob = teacher.apply(x, FastbertClassifierLayer, name=name, labels_num=num_classes)
-        student_outputs.append(clf_prob)
-        x = [clf_prob, x]
+        x_next = teacher.apply_attention_layers(x_pre, idx)
+        clf_next = teacher.apply(x_pre, FastbertClassifierLayer, name=name, labels_num=num_classes)
+        student_outputs.append(clf_next)
 
-    clf_prob, x = x
+        x = SwitchTwo(speed)([clf_pre, x_pre, x_next])
+        clf = SwitchTwo(speed)([clf_pre, clf_pre, clf_next])
+        outputs = [clf, x]
+
+    clf_prob, x = outputs
     x = classifier(x)
-    model = Model(inputs, [x] + student_outputs)
-    model_infer = Model(inputs, x)
-    model_1 = Model(inputs, student_outputs[0])
-    model_2 = Model(inputs, student_outputs[1])
-    model_3 = Model(inputs, student_outputs[2])
-    for prob in student_outputs:
-        model.add_loss(kullback_leibler_divergence(x, prob))
-    return model, model_infer, model_1, model_2, model_3
+
+    output = SwitchTwo(speed)([clf_prob, clf_prob, x])
+    model_infer = Model(inputs, output)
+
+    label_inputs = Input(shape=(None,))
+    model_train = Model(inputs + [label_inputs], student_outputs)
+
+    for i, prob in enumerate(student_outputs):
+        ce_loss = K.sparse_categorical_crossentropy(label_inputs, prob)
+        kl_loss = kullback_leibler_divergence(x, prob)
+        model_train.add_loss(ce_loss)
+        model_train.add_metric(ce_loss, name='ce_loss-%d' % i)
+        model_train.add_loss(kl_loss)
+        model_train.add_metric(kl_loss, name='loss-%d' % i)
+
+    model_1 = Model(inputs, student_outputs[1])
+    model_2 = Model(inputs, student_outputs[2])
+
+    return model_train, model_infer, model_1, model_2
 
 
-model, model_infer, model_1, model_2, model_3 = fastbert(teacher, classifier, speed=0.1)
+model_train, model_infer, model_1, model_2 = fastbert(teacher, classifier, speed=speed)
+
+model_train.compile(optimizer=Adam(1e-5))
+
+
+def evaluate(data, model):
+    total, right = 0., 0.
+    for x_true, y_true in tqdm(data):
+        y_pred = model.predict(x_true)[:, :num_classes].argmax(axis=1)
+        if y_true.shape[1] > 1:
+            y_true = y_true[:, :num_classes].argmax(axis=-1)
+        else:
+            y_true = y_true[:, 0]
+        total += len(y_true)
+        right += (y_true == y_pred).sum()
+    return right / total
+
+
+def evaluate_single(data, model):
+    """验证单个样本"""
+    total, right = 0., 0.
+    for x_true, y_true in tqdm(data):
+        for i in range(len(y_true)):
+            tokens, segs = x_true
+            token = tokens[i: i + 1]
+            seg = segs[i: i + 1]
+            x = [token, seg]
+            y = y_true[i]
+            y_pred = model.predict(x).argmax(axis=1)
+            total += len(y)
+            right += (y == y_pred).sum()
+    print(right, total)
+    return right / total
+
+
+class Evaluator(keras.callbacks.Callback):
+    def __init__(self, save_name, evaluate_model=None, *args, **kwargs):
+        super(Evaluator, self).__init__(*args, **kwargs)
+        self.save_name = save_name
+        self.evaluate_model = evaluate_model or self.model
+        self.best_acc = 0.
+
+    def on_epoch_end(self, epoch, logs=None):
+        cur_acc = evaluate(valid_generator, self.evaluate_model)
+        if self.best_acc < cur_acc:
+            self.best_acc = cur_acc
+            self.model.save(self.save_name)
+        print('cur acc: ', cur_acc, ' best acc: ', self.best_acc)
+
+
 print(evaluate(valid_generator, model_1))
 print(evaluate(valid_generator, model_2))
-print(evaluate(valid_generator, model_3))
-
-Adamw = extend_with_piecewise_linear_lr(Adam)
-opt = Adamw(lr_schedule={3 * len(train_no_label_generator): 1., 10 * len(train_no_label_generator): 0.},
-            learning_rate=2e-5)
-model.compile(optimizer=opt, metrics=['sparse_categorical_accuracy'])
 
 if __name__ == '__main__':
+    teacher_model_name = 'best.teacher.weights'
+    teacher_evaluator = Evaluator(teacher_model_name)
     teacher_model.fit_generator(train_generator.generator(),
                                 steps_per_epoch=len(train_generator),
-                                epochs=5)
+                                epochs=5,
+                                callbacks=[teacher_evaluator])
 
     # train fastbert
+    fastbert_model_name = 'best.fastbert.weights'
+    fastbert_evaluator = Evaluator(fastbert_model_name, model_1)
+    model_train.fit_generator(train_transfer_generator.generator(),
+                              steps_per_epoch=len(train_transfer_generator),
+                              epochs=20,
+                              callbacks=[fastbert_evaluator])
 
-    model.fit_generator(train_no_label_generator.generator(),
-                        steps_per_epoch=len(train_generator),
-                        epochs=10)
+    # evaluate single sample
+    evaluate_single(valid_generator, model_train)
 
-    # infer
-    # todo
+else:
+    model_name = 'best.fastbert.weights'
+    model_infer.load_weights(model_name)
+    evaluate_single(valid_generator, model_train)
