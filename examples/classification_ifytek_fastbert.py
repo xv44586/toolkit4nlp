@@ -336,9 +336,9 @@ if __name__ == '__main__':
                               callbacks=[fastbert_evaluator])
 
     # evaluate single sample
-    evaluate_single(valid_generator, model_infer)
+    print(evaluate_single(valid_generator, model_infer))
 
 else:
     model_name = 'best.fastbert.weights'
     model_train.load_weights(model_name)
-    evaluate_single(valid_generator, model_infer)
+    print(evaluate_single(valid_generator, model_infer))
