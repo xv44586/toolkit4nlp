@@ -197,6 +197,7 @@ def insert_arguments(**arguments):
 
 def remove_arguments(*argments):
     """类方法上禁用某些参数"""
+
     def decorator(func):
         def new_func(self, *args, **kwargs):
             for k in argments:
@@ -208,6 +209,7 @@ def remove_arguments(*argments):
             return func(self, *args, **kwargs)
 
         return new_func
+
     return decorator
 
 
@@ -360,7 +362,8 @@ class ViterbiDecoder(object):
 
         return paths[score[:, 0].argmax(), :]
 
-def text_segmentate(text, maxlen,seps='\n', strips=None):
+
+def text_segmentate(text, maxlen, seps='\n', strips=None):
     """过滤strips，按照seps顺序切分句子为若干个短句子"""
     text = text.strip().strip(strips)
     if seps and len(text) > maxlen:
