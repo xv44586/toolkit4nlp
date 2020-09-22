@@ -302,10 +302,13 @@ class Evaluator(keras.callbacks.Callback):
     def __init__(self, save_name, evaluate_model=None, *args, **kwargs):
         super(Evaluator, self).__init__(*args, **kwargs)
         self.save_name = save_name
-        self.evaluate_model = evaluate_model or self.model
+        self.evaluate_model = evaluate_model
         self.best_acc = 0.
 
     def on_epoch_end(self, epoch, logs=None):
+        if self.evaluate_model is None:
+            self.evaluate_model = self.model
+
         cur_acc = evaluate(valid_generator, self.evaluate_model)
         if self.best_acc < cur_acc:
             self.best_acc = cur_acc
@@ -333,9 +336,9 @@ if __name__ == '__main__':
                               callbacks=[fastbert_evaluator])
 
     # evaluate single sample
-    evaluate_single(valid_generator, model_train)
+    evaluate_single(valid_generator, model_infer)
 
 else:
     model_name = 'best.fastbert.weights'
-    model_infer.load_weights(model_name)
-    evaluate_single(valid_generator, model_train)
+    model_train.load_weights(model_name)
+    evaluate_single(valid_generator, model_infer)
