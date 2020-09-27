@@ -8,7 +8,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='toolkit4nlp',
-    version='0.2.6',
+    version='0.3.0',
     description='an toolkit for nlp research',
     long_description='toolkit4nlp: https://github.com/xv44586/toolkit4nlp',
     license='Apache License 2.0',
