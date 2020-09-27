@@ -5,6 +5,7 @@
 # @File    : models.py
 import six
 import json
+import numpy as np
 
 from toolkit4nlp.layers import *
 from keras.models import Model
@@ -53,6 +54,7 @@ class Transformer(object):
         self.embedding_size = embedding_size or hidden_size
         self.sequence_length = sequence_length
         self.attention_mask = attention_mask
+        self.position_bias = None
         self.layers = layers or {}
         self.name = name
         self.prefix = prefix or ''
@@ -510,6 +512,140 @@ class ELECTRA(BERT):
         return inputs
 
 
+class NEZHA(BERT):
+    """
+    出自华为诺亚方舟实验室的NEZHA模型，结构上的改进是替换bert中的绝对位置编码为相对位置编码
+
+    ref: [NEZHA: Neural Contextualized Representation for Chinese Language Understanding](http://arxiv.org/abs/1909.00204)
+    """
+    def apply_embeddings(self, inputs):
+        """
+        embedding 是 token embedding 与 segment embedding 的和
+        """
+        x, s = inputs[:2]
+        token_embedding = self.apply(inputs=x,
+                                     layer=Embedding,
+                                     name='Embedding-Token',
+                                     input_dim=self.vocab_size,
+                                     output_dim=self.embedding_size,
+                                     embeddings_initializer=self.initializer,
+                                     mask_zero=True
+                                     )
+        segment_embedding = self.apply(s,
+                                       Embedding,
+                                       name='Embedding-Segment',
+                                       input_dim=2,
+                                       output_dim=self.embedding_size,
+                                       embeddings_initializer=self.initializer,
+                                       )
+        x = self.apply([token_embedding, segment_embedding], Add, name='Embedding-Token-Segment')
+
+        x = self.apply(x,
+                       LayerNormalization,
+                       name='Embedding-Norm')
+        x = self.apply(x,
+                       Dropout,
+                       name='Embedding-Dropout',
+                       rate=self.dropout_rate)
+        if self.hidden_size != self.embedding_size:
+            x = self.apply(x,
+                           Dense,
+                           name='Embedding-Mapping',
+                           units=self.hidden_size,
+                           kernel_initializer=self.initializer)
+
+        return x
+
+    def apply_transformer_layers(self, inputs, idx):
+        """
+        Att --> Dropout --> Add --> LN --> FFN --> Dropout -->  Add --> LN
+        """
+        attention_name = 'Transformer-%d-MultiHeadSelfAttention' % idx
+        feed_forward_name = 'Transformer-%d-FeedForward' % idx
+        attention_mask = self.compute_attention_mask(idx)
+        position_bias = self.compute_position_bias(inputs)
+
+        x_pre, x = inputs, [inputs, inputs, inputs, position_bias]  # 加入相对位置编码
+        arguments = {'a_mask': None, 'p_bias': 'relative'}
+        if attention_mask is not None:
+            arguments['a_mask'] = True
+            x.insert(3, attention_mask)
+
+        # self-attention
+        x = self.apply(x,
+                       MultiHeadAttention,
+                       name=attention_name,
+                       head_nums=self.num_attention_heads,
+                       head_size=self.attention_head_size,
+                       arguments=arguments,
+                       kernel_initializer=self.initializer)
+
+        x = self.apply(x,
+                       Dropout,
+                       name='%s-Dropout' % attention_name,
+                       rate=self.dropout_rate)
+
+        x = self.apply([x_pre, x],
+                       Add,
+                       name='%s-Add' % attention_name
+                       )
+
+        x = self.apply(x,
+                       LayerNormalization,
+                       name='%s-Norm' % attention_name,
+                       )
+
+        # feedforward
+        x_pre = x
+        x = self.apply(x,
+                       FeedForward,
+                       name=feed_forward_name,
+                       units=self.intermediate_size,
+                       activation=self.hidden_act,
+                       kernel_initializer=self.initializer
+                       )
+        x = self.apply(x,
+                       Dropout,
+                       name='%s-Dropout' % feed_forward_name,
+                       rate=self.dropout_rate)
+        x = self.apply([x_pre, x],
+                       Add,
+                       name='%s-Add' % feed_forward_name)
+        x = self.apply(x, LayerNormalization, name='%s-Norm' % feed_forward_name)
+        return x
+
+    def compute_position_bias(self, inputs):
+        """计算相对位置编码"""
+        if self.position_bias is None:
+
+            def sinusoidal(shape, dtype=None):
+                """
+                直接使用Sin-Cos形式的位置编码
+                """
+                vocab_size, depth = shape
+                embeddings = np.zeros(shape)
+                for j in range(vocab_size):
+                    for k in range(depth//2):
+                        theta = j / np.power(10000, 2. * k / depth)
+                        embeddings[j, 2 * k] = K.sin(theta)
+                        embeddings[j, 2 * k + 1] = K.cos(theta)
+
+                return embeddings
+
+            x = inputs
+            self.position_bias = self.apply(
+                inputs=x,
+                layer=RelativePositionEmbedding,
+                name='Relative-Position-Embedding',
+                input_dim=2 * 64 + 1,
+                output_dim=self.attention_key_size,
+                embedding_initializer=sinusoidal,
+                trainable=False
+            )
+
+        return self.position_bias
+
+
 class DBERT(BERT):
     """
     用连续的dgcnn来替换原始bert中的transformer block，来尝试压缩bert
@@ -669,6 +805,8 @@ def build_transformer_model(
 
     models = {
         'bert': BERT,
+        'reberta': BERT,
+        'nezha': NEZHA,
         'electra': ELECTRA,
         'dbert': DBERT
     }
