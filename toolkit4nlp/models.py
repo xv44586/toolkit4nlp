@@ -627,14 +627,14 @@ class NEZHA(BERT):
                 for j in range(vocab_size):
                     for k in range(depth//2):
                         theta = j / np.power(10000, 2. * k / depth)
-                        embeddings[j, 2 * k] = K.sin(theta)
-                        embeddings[j, 2 * k + 1] = K.cos(theta)
+                        embeddings[j, 2 * k] = np.sin(theta)
+                        embeddings[j, 2 * k + 1] = np.cos(theta)
 
                 return embeddings
 
             x = inputs
             self.position_bias = self.apply(
-                inputs=x,
+                inputs=[x, x],
                 layer=RelativePositionEmbedding,
                 name='Relative-Position-Embedding',
                 input_dim=2 * 64 + 1,

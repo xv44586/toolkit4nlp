@@ -397,7 +397,7 @@ class RelativePositionEmbedding(Layer):
     ref：[Self-Attention with Relative Position Representations](http://arxiv.org/abs/1803.02155）
     """
 
-    def __init__(self, input_dim, output_dim, embedding_initializer='zero', **kwargs):
+    def __init__(self, input_dim, output_dim, embedding_initializer='zeros', **kwargs):
         super(RelativePositionEmbedding, self).__init__(**kwargs)
         self.input_dim = input_dim
         self.output_dim = output_dim
@@ -415,9 +415,9 @@ class RelativePositionEmbedding(Layer):
 
     def compute_position_idx(self, inputs):
         q, v = inputs
-        q_idx = K.arange(K.shape(q)[1], dtype='int32')
+        q_idx = K.arange(0, K.shape(q)[1], dtype='int32')
         q_idx = K.expand_dims(q_idx, 1)
-        v_idx = K.arange(K.shape(v)[1], dtype='int32')
+        v_idx = K.arange(0, K.shape(v)[1], dtype='int32')
         v_idx = K.expand_dims(v_idx, 0)
         # 相对位置差
         position_idx = v_idx - q_idx
@@ -437,7 +437,7 @@ class RelativePositionEmbedding(Layer):
         config = {
             'input_dim': self.input_dim,
             'output_dim': self.output_dim,
-            'embeddings_initializer': initializers.get(self.embedding_initializer)
+            'embeddings_initializer': initializers.serialize(self.embedding_initializer)
         }
         return dict(list(base_config.items()) + list(config.items()))
 
