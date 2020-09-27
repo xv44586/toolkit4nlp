@@ -91,14 +91,15 @@ class MultiHeadAttention(Layer):
         kw = K.reshape(kw, [-1, K.shape(k)[1], self.head_nums, self.key_size])
         vw = K.reshape(vw, [-1, K.shape(v)[1], self.head_nums, self.head_size])
         # 计算attention
-        # att = tf.einsum('bshk,bqhk->bhsq', qw, kw)
         att = tf.einsum('bjhd,bkhd->bhjk', qw, kw)
-        if self.attention_scale:
-            att = att / self.key_size ** 0.5
         # 处理位置编码
         if position_bias == 'relative':
             position_embeddings = inputs[idx]
             att = att + tf.einsum('bjhd,jkd->bhjk', qw, position_embeddings)
+
+        if self.attention_scale:
+            att = att / self.key_size ** 0.5
+
         # value mask
         att = sequence_masking(att, v_mask, 'add', -1)
         # attention mask
