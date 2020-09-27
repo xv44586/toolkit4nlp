@@ -437,7 +437,7 @@ class RelativePositionEmbedding(Layer):
         config = {
             'input_dim': self.input_dim,
             'output_dim': self.output_dim,
-            'embeddings_initializer': initializers.serialize(self.embedding_initializer)
+            'embedding_initializer': initializers.serialize(self.embedding_initializer)
         }
         return dict(list(base_config.items()) + list(config.items()))
 

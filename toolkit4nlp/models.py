@@ -618,20 +618,6 @@ class NEZHA(BERT):
         """计算相对位置编码"""
         if self.position_bias is None:
 
-            def sinusoidal(shape, dtype=None):
-                """
-                直接使用Sin-Cos形式的位置编码
-                """
-                vocab_size, depth = shape
-                embeddings = np.zeros(shape)
-                for j in range(vocab_size):
-                    for k in range(depth//2):
-                        theta = j / np.power(10000, 2. * k / depth)
-                        embeddings[j, 2 * k] = np.sin(theta)
-                        embeddings[j, 2 * k + 1] = np.cos(theta)
-
-                return embeddings
-
             x = inputs
             self.position_bias = self.apply(
                 inputs=[x, x],
@@ -639,7 +625,7 @@ class NEZHA(BERT):
                 name='Relative-Position-Embedding',
                 input_dim=2 * 64 + 1,
                 output_dim=self.attention_key_size,
-                embedding_initializer=sinusoidal,
+                embedding_initializer='sinusoidal',
                 trainable=False
             )
 
