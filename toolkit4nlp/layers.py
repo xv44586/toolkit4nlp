@@ -8,8 +8,9 @@ import tensorflow as tf
 
 from toolkit4nlp.backend import K, keras
 from toolkit4nlp.backend import sequence_masking
+from toolkit4nlp import initializers
 from keras.layers import *
-from keras import initializers, activations
+from keras import activations
 
 
 class Layer(keras.layers.Layer):

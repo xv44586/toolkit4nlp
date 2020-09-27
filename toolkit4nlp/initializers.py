@@ -8,8 +8,8 @@ from keras.initializers import *
 
 
 class Sinusoidal(Initializer):
-    """I
-
+    """I，
+    sinusoidal 初始化器，出自[NEZHA: Neural Contextualized Representation for Chinese Language Understanding](http://arxiv.org/abs/1909.00204)
     """
 
     def __call__(self, shape, dtype=None):

@@ -566,7 +566,7 @@ class NEZHA(BERT):
         position_bias = self.compute_position_bias(inputs)
 
         x_pre, x = inputs, [inputs, inputs, inputs, position_bias]  # 加入相对位置编码
-        arguments = {'a_mask': None, 'p_bias': 'relative'}
+        arguments = {'a_mask': None, 'position_bias': 'relative'}
         if attention_mask is not None:
             arguments['a_mask'] = True
             x.insert(3, attention_mask)
