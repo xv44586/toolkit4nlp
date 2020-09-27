@@ -67,9 +67,9 @@ class data_generator(DataGenerator):
     """数据生成器
     """
 
-    def __iter__(self):
+    def __iter__(self, shuffle=False):
         batch_token_ids, batch_segment_ids, batch_original_token_ids = [], [], []
-        for is_end, item in self.get_sample():
+        for is_end, item in self.get_sample(shuffle):
             context, question, answers = item[1:]
             answer = np.random.choice(answers)
             token_ids, _ = tokenizer.encode(answer, context, maxlen=maxlen - max_question_len - 1)

@@ -73,9 +73,9 @@ class data_generator(DataGenerator):
     """数据生成器
     """
 
-    def __iter__(self, random=False):
+    def __iter__(self, shuffle=False):
         batch_token_ids, batch_segment_ids, batch_labels = [], [], []
-        for is_end, item in self.get_sample():
+        for is_end, item in self.get_sample(shuffle):
             context, questions, answers = item[1:]
             if type(questions) != list:
                 question = questions

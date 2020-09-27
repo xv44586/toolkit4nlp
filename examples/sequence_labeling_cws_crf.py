@@ -65,10 +65,10 @@ val_data = [data[i] for i in row_nums if i % 10 == 0]
 print(len(train_data), len(val_data))
 
 class data_generator(DataGenerator):
-    def __iter__(self, random=False):
+    def __iter__(self, shuffle=False):
         # 0: 单字，1，多字词开头，2，中间，3，末尾
         batch_tokens, batch_segs, batch_labels = [], [], []
-        for is_end, item in self.get_sample():
+        for is_end, item in self.get_sample(shuffle):
             token_ids, labels = [tokenizer._token_start_id], [0]
             for word in item:
                 token_id = tokenizer.encode(word)[0][1:-1]

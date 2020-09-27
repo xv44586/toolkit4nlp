@@ -78,10 +78,10 @@ class data_generator(DataGenerator):
     """数据生成器
     """
 
-    def __iter__(self):
+    def __iter__(self, shuffle=False):
         """[CLS]context[SEP]answer[SEP]question[SEP]"""
         batch_token_ids, batch_segment_ids, batch_labels = [], [], []
-        for is_end, item in self.get_sample():
+        for is_end, item in self.get_sample(shuffle):
             context, question, answer = item[1:]
             c_token_ids, _ = tokenizer.encode(context, maxlen=max_context_len + 1)
             q_token_ids, _ = tokenizer.encode(question, maxlen=max_question_len)

@@ -64,9 +64,9 @@ class data_generator(DataGenerator):
         super(data_generator, self).__init__(**kwargs)
         self.seq2seq = seq2seq
 
-    def __iter__(self, random=False):
+    def __iter__(self, shuffle=False):
         batch_token_ids, batch_segment_ids, batch_labels = [], [], []
-        for is_end, (text, label, label_des) in self.get_sample():
+        for is_end, (text, label, label_des) in self.get_sample(shuffle):
             if not self.seq2seq:
                 token_ids, segment_ids = tokenizer.encode(text, maxlen=maxlen)
             else:

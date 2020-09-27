@@ -71,9 +71,9 @@ class data_generator(DataGenerator):
         super(data_generator, self).__init__(**kwargs)
         self.sim = sim
 
-    def __iter__(self, random=False):
+    def __iter__(self, shuffle=False):
         batch_token_ids, batch_segment_ids, batch_labels = [], [], []
-        for is_end, (text, label, label_des) in self.get_sample():
+        for is_end, (text, label, label_des) in self.get_sample(shuffle):
             if not self.sim:
                 token_ids, segment_ids = tokenizer.encode(text, maxlen=maxlen)
                 batch_token_ids.append(token_ids)

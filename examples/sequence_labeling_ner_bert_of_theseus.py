@@ -80,9 +80,9 @@ class data_generator(DataGenerator):
     """数据生成器
     """
 
-    def __iter__(self, random=False):
+    def __iter__(self, shuffle=False):
         batch_token_ids, batch_segment_ids, batch_labels = [], [], []
-        for is_end, item in self.get_sample():
+        for is_end, item in self.get_sample(shuffle):
             token_ids, labels = [tokenizer._token_start_id], [0]
             for w, l in item:
                 w_token_ids = tokenizer.encode(w)[0][1:-1]

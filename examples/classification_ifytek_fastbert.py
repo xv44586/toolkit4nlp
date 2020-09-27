@@ -79,9 +79,9 @@ class data_generator(DataGenerator):
         self.data_augmentation = data_augmentation
         self.transfer = transfer
 
-    def __iter__(self, random=False):
+    def __iter__(self, shuffle=False):
         batch_token_ids, batch_segment_ids, batch_labels = [], [], []
-        for is_end, (text, label, label_des) in self.get_sample():
+        for is_end, (text, label, label_des) in self.get_sample(shuffle):
             if self.data_augmentation:
                 text = self.generate_text(text)
             token_ids, segment_ids = tokenizer.encode(text, maxlen=maxlen)

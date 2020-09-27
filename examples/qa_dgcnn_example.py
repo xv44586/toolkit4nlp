@@ -111,9 +111,9 @@ class data_generator(DataGenerator):
 
         return tokens
 
-    def __iter__(self):
+    def __iter__(self, shuffle=False):
         batch_token_ids, batch_segment_ids, batch_labels = [], [], []
-        for is_end, item in self.get_sample():
+        for is_end, item in self.get_sample(shuffle):
             context, question, answers = item[1:]
 
             context = self.random_generator(context)
