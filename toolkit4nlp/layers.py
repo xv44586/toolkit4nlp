@@ -358,6 +358,41 @@ class AttentionPooling1D(Layer):
         return None
 
 
+class RelativePositionEmbedding(Layer):
+    """相对位置编码
+    ref：[Self-Attention with Relative Position Representations](http://arxiv.org/abs/1803.02155）
+    """
+
+    def __init__(self, input_dim, output_dim, embedding_initializer='zero', **kwargs):
+        super(RelativePositionEmbedding, self).__init__(**kwargs)
+        self.input_dim = input_dim
+        self.output_dim = output_dim
+        self.embedding_initializer = initializers.get(embedding_initializer)
+
+    def build(self, input_shape):
+        super(RelativePositionEmbedding, self).build(input_shape)
+        self.embeddings = self.add_weight(name='relativePositionEmbedding',
+                                          shape=(self.input_dim, self.output_dim),
+                                          initializer=self.embedding_initializer, )
+
+    def call(self, inputs):
+        relative_position_idx = self.compute_position_idx(inputs)
+        return K.gather(self.embeddings, relative_position_idx)
+
+    def compute_position_idx(self, inputs):
+        q, v = inputs
+        q_idx = K.arange(K.shape(q)[1], dtype='int32')
+        q_idx = K.expand_dims(q_idx, 1)
+        v_idx = K.arange(K.shape(v)[1], dtype='int32')
+        v_idx = K.expand_dims(v_idx, 0)
+        # 相对位置差
+        position_idx = v_idx - q_idx
+        max_position = (self.input_dim - 1) // 2
+        position_idx = K.clip(position_idx, -max_position, max_position)
+        position_idx = position_idx + max_position
+        return position_idx
+
+
 class DGCNN(Layer):
     """
     膨胀卷积网络，优势是本质是一个CNN，所以速度上比RNNs快，同时通过不同的膨胀系数，如【1，3，5，8】可以来整合全局信息，
