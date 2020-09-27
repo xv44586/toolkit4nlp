@@ -60,16 +60,15 @@ class MultiHeadAttention(Layer):
         )
 
     def call(self, inputs, mask=None, a_mask=None, position_bias=None):
-        '''
+        """
         多头注意力
-        TODO: position bias
         :param inputs: [q, k, v, a_mask, position_bias]
         :param mask: [q_mask, v_mask],
             q_mask 对query序列进行mask，针对padding；v_mask对value序列进行mask，防止看到某些位置value，如padding
         :param a_mask: Boolean，是否对attention进行mask
-        :param position_bias: Boolean， 是否对attention里的位置进行偏移
+        :param position_bias: type of position bias， 使用指定类型的位置编码对attention里的位置进行偏移
         :return:
-        '''
+        """
         q, k, v = inputs[:3]
         q_mask, v_mask, idx = None, None, 3
         if mask is not None:
@@ -95,6 +94,10 @@ class MultiHeadAttention(Layer):
         att = tf.einsum('bjhd,bkhd->bhjk', qw, kw)
         if self.attention_scale:
             att = att / self.key_size ** 0.5
+        # 处理位置编码
+        if position_bias == 'relative':
+            position_embeddings = inputs[idx]
+            att = att + tf.einsum('bjhd,jkd->bhjk', qw, position_embeddings)
         # value mask
         att = sequence_masking(att, v_mask, 'add', -1)
         # attention mask
@@ -102,8 +105,10 @@ class MultiHeadAttention(Layer):
             att = att - (1 - a_mask) * 1e12
 
         att = K.softmax(att)
-        # output = tf.einsum('bhsq,bqhk->bhsk', att, vw)
         output = tf.einsum('bhjk,bkhd->bjhd', att, vw)
+        # 继续处理位置编码
+        if position_bias == 'relative':
+            output = output + tf.einsum('bhjk,jkd->bjhd', att, position_embeddings)
         output = K.reshape(output, (-1, K.shape(output)[1], self.output_dim))
         output = self.combine_dense(output)
         # query mask
