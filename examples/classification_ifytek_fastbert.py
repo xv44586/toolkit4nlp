@@ -232,7 +232,7 @@ def fastbert(teacher, classifier, speed=speed):
     for idx in range(teacher.num_hidden_layers):
         clf_pre, x_pre = outputs
         name = 'FastBert-%d' % idx
-        x_next = teacher.apply_attention_layers(x_pre, idx)
+        x_next = teacher.apply_transformer_layers(x_pre, idx)
         clf_next = teacher.apply(x_pre, FastbertClassifierLayer, name=name, labels_num=num_classes)
         student_outputs.append(clf_next)
 

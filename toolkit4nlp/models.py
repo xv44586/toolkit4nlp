@@ -84,7 +84,7 @@ class Transformer(object):
 
         # main transformer layers
         for _ in range(self.num_hidden_layers):
-            outputs = self.apply_attention_layers(outputs, _)
+            outputs = self.apply_transformer_layers(outputs, _)
 
         # task related layers
         outputs = self.apply_task_related(outputs)
@@ -132,7 +132,7 @@ class Transformer(object):
     def apply_embeddings(self, inputs):
         raise NotImplementedError
 
-    def apply_attention_layers(self, inputs, idx):
+    def apply_transformer_layers(self, inputs, idx):
         raise NotImplementedError
 
     def apply_task_related(self, inputs):
@@ -302,7 +302,7 @@ class BERT(Transformer):
 
         return x
 
-    def apply_attention_layers(self, inputs, idx):
+    def apply_transformer_layers(self, inputs, idx):
         """
         Att --> Dropout --> Add --> LN --> FFN --> Dropout -->  Add --> LN
         """
@@ -521,7 +521,7 @@ class DBERT(BERT):
         super(DBERT, self).__init__(**kwargs)
         self.inner_hidden_size = inner_hidden_size or self.attention_head_size  # dgcnn hidden dim
 
-    def apply_attention_layers(self, inputs, idx):
+    def apply_transformer_layers(self, inputs, idx):
         """
             liner_in(inner_hid_dim) -> dgcnn(1) -> dgcnn(3) -> dgcnn(5) -> dgcnn(8) -> liner_out(hid_dim)
         """

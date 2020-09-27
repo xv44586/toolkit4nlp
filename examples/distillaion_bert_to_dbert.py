@@ -287,10 +287,10 @@ def tranfer(teacher, student, teacher_classifier, student_classifier):
     for index in range(student.num_hidden_layers):
         teacher_outputs = outputs[0]
         for sub_index in range(layers_per_module):
-            teacher_outputs = teacher.apply_attention_layers(
+            teacher_outputs = teacher.apply_transformer_layers(
                 teacher_outputs, layers_per_module * index + sub_index
             )
-        student_outputs = student.apply_attention_layers(outputs[1], index)
+        student_outputs = student.apply_transformer_layers(outputs[1], index)
         outputs = CollectLoss(1 * index / student.num_hidden_layers)([teacher_outputs, student_outputs])
     # 返回模型
     outputs = student_classifier(outputs[1])
