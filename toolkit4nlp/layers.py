@@ -129,7 +129,7 @@ class MultiHeadAttention(Layer):
                        'key_size': self.key_size,
                        'use_bias': self.use_bias,
                        'attention_scale': self.attention_scale,
-                       'kernel_initializer': self.kernel_initializer})
+                       'kernel_initializer': initializers.serialize(self.kernel_initializer)})
         return config
 
 
@@ -396,6 +396,21 @@ class RelativePositionEmbedding(Layer):
         position_idx = K.clip(position_idx, -max_position, max_position)
         position_idx = position_idx + max_position
         return position_idx
+
+    def compute_output_shape(self, input_shape):
+        return (None, None, self.output_dim)
+
+    def compute_mask(self, inputs, mask=None):
+        return mask[0]
+
+    def get_config(self):
+        base_config = super(RelativePositionEmbedding, self).get_config()
+        config = {
+            'input_dim': self.input_dim,
+            'output_dim': self.output_dim,
+            'embeddings_initializer': initializers.get(self.embedding_initializer)
+        }
+        return dict(list(base_config.items()) + list(config.items()))
 
 
 class DGCNN(Layer):
