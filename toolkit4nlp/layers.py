@@ -185,9 +185,14 @@ class LayerNormalization(Layer):
 class TokenAndPositionEmbedding(Layer):
     def __init__(self, vocab_size, embed_dim, maxlen, **kwargs):
         super(TokenAndPositionEmbedding, self).__init__(**kwargs)
-        self.token_emb = Embedding(input_dim=vocab_size, output_dim=embed_dim, name='token_emb')
-        self.pos_emb = Embedding(input_dim=maxlen, output_dim=embed_dim, name='pos_emb')
+        self.vocab_size = vocab_size
         self.embed_dim = embed_dim
+        self.maxlen = maxlen
+
+    def build(self, input_shape):
+        super(TokenAndPositionEmbedding, self).build(input_shape)
+        self.token_emb = Embedding(input_dim=self.vocab_size, output_dim=self.embed_dim, name='token_emb')
+        self.pos_emb = Embedding(input_dim=self.maxlen, output_dim=self.embed_dim, name='pos_emb')
 
     def call(self, inputs):
         maxlen = K.shape(inputs)[-1]
@@ -198,6 +203,15 @@ class TokenAndPositionEmbedding(Layer):
 
     def compute_output_shape(self, input_shape):
         return tuple(list(input_shape) + [self.embed_dim])
+
+    def get_config(self):
+        base_config = super(TokenAndPositionEmbedding, self).get_config()
+        config = {
+            "vocab_size": self.vocab_size,
+            "maxlen": self.maxlen,
+            "embed_dim": self.embed_dim
+        }
+        return dict(list(base_config.items()) + list(config.items()))
 
 
 class PositionEmbedding(Layer):
@@ -243,11 +257,11 @@ class PositionEmbedding(Layer):
 
     def get_config(self):
         base_config = super(PositionEmbedding, self).get_config()
-        base_config.update({'input_dim': self.input_dim,
-                            'output_dim': self.output_dim,
-                            'merge_mode': self.merge_mode,
-                            'embeddings_initializer': initializers.serialize(self.embeddings_initializer)})
-        return base_config
+        config = {'input_dim': self.input_dim,
+                  'output_dim': self.output_dim,
+                  'merge_mode': self.merge_mode,
+                  'embeddings_initializer': initializers.serialize(self.embeddings_initializer)}
+        return dict(list(base_config.items()) + list(config.items()))
 
 
 class FeedForward(Layer):
@@ -282,6 +296,16 @@ class FeedForward(Layer):
         x = self.dense_1(inputs)
         x = self.dense_2(x)
         return x
+
+    def get_config(self):
+        base_config = super(FeedForward, self).get_config()
+        config = {
+            'units': self.units,
+            'activation': self.activation,
+            'use_bias': self.use_bias,
+            'kernel_initializer': initializers.serialize(self.kernel_initializer)
+        }
+        return dict(list(base_config.items()) + list(config.items()))
 
 
 class BiasAdd(Layer):
@@ -361,6 +385,11 @@ class AttentionPooling1D(Layer):
 
     def compute_mask(self, inputs, mask=None):
         return None
+
+    def get_config(self):
+        base_config = super(AttentionPooling1D, self).get_config()
+        config = {'h_dim': self.h_dim}
+        return dict(list(base_config.items()) + list(config.items()))
 
 
 class RelativePositionEmbedding(Layer):
@@ -466,6 +495,17 @@ class DGCNN(Layer):
 
     def compute_mask(self, inputs, mask):
         return mask
+
+    def get_config(self):
+        base_config = super(DGCNN, self).get_config()
+        config = {
+            'o_dim': self.o_dim,
+            'k_size': self.k_size,
+            'dilation_rate': self.dilation_rate,
+            'skip_connection': self.skip_connection,
+            'dropout_rate': self.dropout_rate
+        }
+        return dict(list(base_config.items()) + list(config.items()))
 
 
 class SinCosPositionEmbedding(Layer):
@@ -676,6 +716,7 @@ custom_objects = {
     'DGCNN': DGCNN,
     'SinCosPositionEmbedding': SinCosPositionEmbedding,
     'Loss': Loss,
+    'RelativePositionEmbedding': RelativePositionEmbedding
 }
 
 keras.utils.get_custom_objects().update(custom_objects)
