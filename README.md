@@ -4,7 +4,15 @@
  为了方便自己学习与理解一些东西，实现一些自己的想法
 
 ## Update info:
-  - <strong>2020/09.22</strong> 增加FastBERT的实现，具体代码：<a href='https://github.com/xv44586/toolkit4nlp/blob/master/examples/classification_ifytek_fastbert.py'>classification ifytek with FastBERT</a>
+  - <strong>2020.09.27</strong> 增加NEZHA的实现，使用方法：
+  ```python
+from toolkit4nlp.models import build_transformer_model
+config_path = '/home/mingming.xu/pretrain/NLP/chinese_nezha_base/config.json'
+checkpoint_path = '/home/mingming.xu/pretrain/NLP/chinese_nezha_base/model_base.ckpt'
+
+model = build_transformer_model(config_path=config_path, checkpoint_path=checkpoint_path, model='nezha')
+```
+  - <strong>2020.09.22</strong> 增加FastBERT的实现，具体代码：<a href='https://github.com/xv44586/toolkit4nlp/blob/master/examples/classification_ifytek_fastbert.py'>classification ifytek with FastBERT</a>
   - <strong>2020.09.15</strong> 增加两个尝试在分类任务上构造新的任务来增强性能实验，具体代码：<a href='https://github.com/xv44586/toolkit4nlp/blob/master/examples/classification_ifytek_with_similarity.py'>classification ifytek with similarity</a> 和 <a href='https://github.com/xv44586/toolkit4nlp/blob/master/examples/classification_ifytek_auxiliary_seq2seq_task.py'>classification ifytek with seq2seq</a>
   - <strong>2020.09.10</strong> 增加Knowledge Distillation Bert example, 具体代码: <a href='https://github.com/xv44586/toolkit4nlp/blob/master/examples/distilling_knowledge_bert.py'>distilling knowledge bert</a>
   - <strong>2020.08.24</strong> 增加UniLM做question answer generation example，具体代码：<a href="https://github.com/xv44586/toolkit4nlp/blob/master/examples/qa_question_answer_generation_seq2seq.py">qa question answer generation</a>
