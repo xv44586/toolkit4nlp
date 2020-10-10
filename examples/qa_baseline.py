@@ -7,7 +7,6 @@
 利用bert做qa任务baseline
 数据是百度2020icl比赛的机器阅读(http://lic2020.cipsc.org.cn/)
 原始数据F1: 80.78
-增加生成问题后数据F1:
 """
 import json, os
 import numpy as np

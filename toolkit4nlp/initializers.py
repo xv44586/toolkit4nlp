@@ -3,13 +3,17 @@
 # @Author  : mingming.xu
 # @Email   : mingming.xu@zhaopin.com
 # @File    : initializers.py
+
+import numpy as np
+
 from toolkit4nlp.backend import keras
 from keras.initializers import *
 
 
 class Sinusoidal(Initializer):
-    """I，
-    sinusoidal 初始化器，出自[NEZHA: Neural Contextualized Representation for Chinese Language Understanding](http://arxiv.org/abs/1909.00204)
+    """
+    sinusoidal initializer，主要用于相对位置编码
+    ref: [NEZHA: Neural Contextualized Representation for Chinese Language Understanding](http://arxiv.org/abs/1909.00204)
     """
 
     def __call__(self, shape, dtype=None):
