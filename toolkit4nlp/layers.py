@@ -486,6 +486,9 @@ class DGCNN(Layer):
         if self.dropout_rate is not None:
             g = K.in_train_phase(K.dropout(g, self.dropout_rate), g)
         g = K.sigmoid(g)
+        # mask is none
+        mask = mask if mask is not None else K.ones_like(x)
+
         if self.skip_connection:
             if K.int_shape(x0)[-1] != self.o_dim:
                 x0 = self.conv1d_1x1(x0)
