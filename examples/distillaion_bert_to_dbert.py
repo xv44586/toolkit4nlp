@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # @Date    : 2020/9/3
 # @Author  : mingming.xu
-# @Email   : mingming.xu@zhaopin.com
+# @Email   : xv44586@gmail.com
 # @File    : distillaion_bert_to_dbert.py
 """
 用膨胀系数为1/3/5/8 四种cnn组成的block来蒸馏bert中的transformer，loss是 embedding_output + transformer_output + classifier_output + label_loss

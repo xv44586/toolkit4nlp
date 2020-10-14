@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # @Date    : 2020/8/11
 # @Author  : mingming.xu
-# @Email   : mingming.xu@zhaopin.com
+# @Email   : xv44586@gmail.com
 # @File    : classification_ifytek_bert_of_theseus.py
 # ! -*- coding:utf-8 -*-
 """

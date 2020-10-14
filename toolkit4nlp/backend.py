@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # @Date    : 2020/7/6
 # @Author  : mingming.xu
-# @Email   : mingming.xu@zhaopin.com
+# @Email   : xv44586@gmail.com
 # @File    : backend.py
 # 判断是tf.keras还是纯keras的标记
 import os, sys

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # @Date    : 2020/7/20
 # @Author  : mingming.xu
-# @Email   : mingming.xu@zhaopin.com
+# @Email   : xv44586@gmail.com
 # @File    : preprocess.py
 import numpy as np
 import tensorflow as tf

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # @Date    : 2020/8/20
 # @Author  : mingming.xu
-# @Email   : mingming.xu@zhaopin.com
+# @Email   : xv44586@gmail.com
 # @File    : qa_question_generator.py
 """
 利用UniLM来通过篇章与答案，来生成问题，可以看做是qa 数据的增强

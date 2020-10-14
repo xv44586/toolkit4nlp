@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # @Date    : 2020/9/18
 # @Author  : mingming.xu
-# @Email   : mingming.xu@zhaopin.com
+# @Email   : xv44586@gmail.com
 # @File    : classification_ifytek_fastbert.py
 """
 借鉴fastbert 的思想：对不同样本选择不同的Transformer 层进行预测，来达到提前结束计算，加速推理。

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # @Date    : 2020/9/8
 # @Author  : mingming.xu
-# @Email   : mingming.xu@zhaopin.com
+# @Email   : xv44586@gmail.com
 # @File    : distilling_knowledge_bert.py
 """
 通过利用大模型（或ensemble多个模型）得到一个 Teacher Model，利用 Teacher Model 来对数据生成 soften labels，

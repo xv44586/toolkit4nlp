@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # @Date    : 2020/9/11
 # @Author  : mingming.xu
-# @Email   : mingming.xu@zhaopin.com
+# @Email   : xv44586@gmail.com
 # @File    : classification_ifytek_auxiliary_seq2seq_task.py
 """
 ### 通过构造一个附加的任务来增强模型的分类性能

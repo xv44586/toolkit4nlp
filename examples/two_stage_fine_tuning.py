@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # @Date    : 2020/8/17
 # @Author  : mingming.xu
-# @Email   : mingming.xu@zhaopin.com
+# @Email   : xv44586@gmail.com
 # @File    : two_stage_fine_tuning.py
 """
 实验验证 bert-of-theseus 中 theseus的必要性：即不添加theseus，训练完predecessor后直接使用其前三层与classifier做fine tuning
