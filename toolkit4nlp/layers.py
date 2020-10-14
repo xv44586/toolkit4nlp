@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf8 -*-
-# @Date     :{DATE}
+# @Date     : 2020/06/01
 # @Author   : mingming.xu
 # @Email    : xv44586@gmail.com
 
