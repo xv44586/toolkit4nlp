@@ -155,6 +155,26 @@ def search_layer(inputs, name, exclude_from=None):
                 if layer is not None:
                     return layer
 
+
+# focal loss for binary classification
+def binary_focal_loss(alpha=0.25, gamma=2.):
+    """
+    (focal loss for binary classification)[https://arxiv.org/pdf/1708.02002.pdf]
+    FL(p) = \left\{\begin{matrix}
+         -\alpha * (1-p)^{\gamma } *log(p),& if &  y=1\\
+         -(1-\alpha * (p)^{\gamma} * log(1-p),& if & y=0
+        \end{matrix}\right.
+    """
+    def focal_loss(y_true, y_pred):
+        y_true = K.cast(y_true, 'int32')
+        p1 = K.switch(K.equal(y_true, 1), y_pred, K.ones_like(y_pred))
+        p0 = K.switch(K.equal(y_true, 0), y_pred, K.zeros_like(y_pred))
+        return - K.mean(alpha * K.pow(1 - p1, gamma) * K.log(p1)) - K.mean(
+            (1 - alpha) * K.pow(p0, gamma) * K.log(1 - p0))
+
+    return focal_loss
+
+
 # 给旧版本keras新增symbolic方法（装饰器），
 # 以便兼容optimizers.py中的代码
 K.symbolic = getattr(K, 'symbolic', None) or symbolic
@@ -164,6 +184,7 @@ custom_objects = {
     'gelu': gelu_erf,
     'swish': swish,
     'leaky_relu': leaky_relu,
+    'binary_focal_loss': binary_focal_loss,
 }
 
 keras.utils.get_custom_objects().update(custom_objects)
