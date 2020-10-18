@@ -23,7 +23,7 @@ from toolkit4nlp.models import build_transformer_model
 from toolkit4nlp.optimizers import Adam
 from toolkit4nlp.utils import pad_sequences, DataGenerator
 from keras.layers import Lambda, Dense
-from toolkit4nlp.backend import K
+from toolkit4nlp.backend import K, binary_focal_loss
 from sklearn.metrics import f1_score
 
 
@@ -131,7 +131,7 @@ class Evaluator(keras.callbacks.Callback):
 
     def __init__(self, save_name='best_model.weights'):
         self.best_val_f1 = 0.
-        self.last_test_f1 = 0.
+        self.best_test_f1 = 0.
         self.save_name = save_name
 
     def on_epoch_end(self, epoch, logs=None):
@@ -141,12 +141,12 @@ class Evaluator(keras.callbacks.Callback):
         if val_f1 > self.best_val_f1:
             self.best_val_f1 = val_f1
             model.save_weights(self.save_name)
-            self.last_test_f1 = test_f1
+            self.best_test_f1 = test_f1
 
         print('epoch : %d val acc is: %.5f, test acc: %.5f\n' %(epoch, val_acc, test_acc))
         print(
             u'val_f1: %.5f, best_val_f1: %.5f, test_f1: %.5f\n' %
-            (val_f1, self.best_val_f1, test_f1)
+            (val_f1, self.best_val_f1, self.best_test_f1)
         )
 
 
@@ -234,7 +234,7 @@ if __name__ == '__main__':
     def compile_model(alpha, gamma):
         model = create_model()
         model.compile(
-            loss=K.focal_loss(alpha, gamma),
+            loss=binary_focal_loss(alpha, gamma),
             optimizer=Adam(1e-4),  # 用足够小的学习率
             metrics=['accuracy'],
         )
