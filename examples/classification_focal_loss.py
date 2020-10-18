@@ -259,7 +259,7 @@ if __name__ == '__main__':
             epochs=5,
             callbacks=[evaluator]
         )
-        result[para] = [evaluator.best_val_f1, evaluator.last_test_f1]
+        result[para] = [evaluator.best_val_f1, evaluator.best_test_f1]
 
         bins, pbins, nbins = cal_bins(model)
         draw(bins, 'all samples'), draw(pbins, 'positive'), draw(nbins, 'negative')
