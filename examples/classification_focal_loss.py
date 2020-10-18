@@ -4,9 +4,9 @@
 # @Email   : xv44586@gmail.com
 # @File    : classification_focal_loss.py
 """
-CE test acc: 85.0
-CE_W best test acc:
-FL best test acc: 87.3
+CE best test f1: 77.8
+CE_W best test f1:
+FL best test f1: 87.3
 数据来源：https://github.com/bojone/bert4keras/blob/master/examples/datasets/sentiment.zip
 """
 import numpy as np
@@ -24,6 +24,8 @@ from toolkit4nlp.optimizers import Adam
 from toolkit4nlp.utils import pad_sequences, DataGenerator
 from keras.layers import Lambda, Dense
 from toolkit4nlp.backend import K
+from sklearn.metrics import f1_score
+
 
 maxlen = 128
 batch_size = 32
@@ -106,12 +108,21 @@ def ce_weighted(y_true, y_pred):
 
 def evaluate(data):
     total, right = 0., 0.
+    preds, trues = [], []
     for x_true, y_true in data:
         y_pred = model.predict(x_true)
+        preds.append(y_pred)
+        trues.append(y_true)
 
         total += len(y_true)
         right += (y_true == np.round(y_pred)).sum()
-    return right / total
+
+    acc = right / total
+
+    preds = np.concatenate(preds)[:, 0]
+    trues = np.concatenate(trues)[:, 0]
+    f1 = f1_score(y_pred=np.round(preds), y_true=trues, average='weighted')
+    return acc, f1
 
 
 class Evaluator(keras.callbacks.Callback):
@@ -119,22 +130,23 @@ class Evaluator(keras.callbacks.Callback):
     """
 
     def __init__(self, save_name='best_model.weights'):
-        self.best_val_acc = 0.
-        self.last_test_acc = 0.
+        self.best_val_f1 = 0.
+        self.last_test_f1 = 0.
         self.save_name = save_name
 
     def on_epoch_end(self, epoch, logs=None):
-        val_acc = evaluate(valid_generator)
-        test_acc = evaluate(test_generator)
+        val_acc, val_f1 = evaluate(valid_generator)
+        test_acc, test_f1 = evaluate(test_generator)
 
-        if val_acc > self.best_val_acc:
-            self.best_val_acc = val_acc
+        if val_f1 > self.best_val_f1:
+            self.best_val_f1 = val_f1
             model.save_weights(self.save_name)
-            self.last_test_acc = test_acc
+            self.last_test_f1 = test_f1
 
+        print('epoch : %d val acc is: %.5f, test acc: %.5f\n' %(epoch, val_acc, test_acc))
         print(
-            u'val_acc: %.5f, best_val_acc: %.5f, test_acc: %.5f\n' %
-            (val_acc, self.best_val_acc, test_acc)
+            u'val_f1: %.5f, best_val_f1: %.5f, test_f1: %.5f\n' %
+            (val_f1, self.best_val_f1, test_f1)
         )
 
 
@@ -247,7 +259,7 @@ if __name__ == '__main__':
             epochs=5,
             callbacks=[evaluator]
         )
-        result[para] = [evaluator.best_val_acc, evaluator.last_test_acc]
+        result[para] = [evaluator.best_val_f1, evaluator.last_test_f1]
 
         bins, pbins, nbins = cal_bins(model)
         draw(bins, 'all samples'), draw(pbins, 'positive'), draw(nbins, 'negative')
