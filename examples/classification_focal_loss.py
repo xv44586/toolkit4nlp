@@ -5,8 +5,8 @@
 # @File    : classification_focal_loss.py
 """
 CE best test f1: 77.8
-CE_W best test f1:
-FL best test f1: 87.3
+CE_W best test f1: 84.6
+FL best test f1: 86.7
 数据来源：https://github.com/bojone/bert4keras/blob/master/examples/datasets/sentiment.zip
 """
 import numpy as np
