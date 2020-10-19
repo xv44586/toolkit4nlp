@@ -6,8 +6,8 @@
 """
 classification use AdaBelief:
 
-bert-3-Adam: 0.579
-bert-3-AdaBelif:
+bert-3-Adam: 57.9
+bert-3-AdaBelif: 58.4
 
 ref: [AdaBelief Optimizer: Adapting Stepsizes by the Belief in Observed Gradients](https://arxiv.org/pdf/2010.07468.pdf)
 """
