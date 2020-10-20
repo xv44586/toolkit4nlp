@@ -293,10 +293,10 @@ class DataGenerator(object):
             for d in self.__iter__(shuffle=True):
                 yield d
 
-    def take(self, nums=1):
+    def take(self, nums=1, shuffle=False):
         """take nums * batch examples"""
         d = []
-        for i, data in enumerate(self.__iter__()):
+        for i, data in enumerate(self.__iter__(shuffle)):
             if i >= nums:
                 break
 
