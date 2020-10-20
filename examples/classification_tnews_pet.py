@@ -4,7 +4,7 @@
 # @Email   : xv44586@gmail.com
 # @File    : classification_tnews_pet.py
 """
-
+将分类任务转换为完形填空，Pattern-Exploiting
 ref:
  [Exploiting Cloze Questions for Few Shot Text Classification and Natural Language Inference](https://arxiv.org/pdf/2001.07676.pdf)
  [It’s Not Just Size That Matters: Small Language Models Are Also Few-Shot Learners](https://arxiv.org/pdf/2009.07118.pdf)
