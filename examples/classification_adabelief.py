@@ -2,12 +2,12 @@
 # @Date    : 2020/10/19
 # @Author  : mingming.xu
 # @Email   : xv44586@gmail.com
-# @File    : classification_adabelif.py
+# @File    : classification_adabelief.py
 """
 classification use AdaBelief:
 
 bert-3-Adam: 57.9
-bert-3-AdaBelif: 58.4
+bert-3-AdaBelief: 58.4
 
 ref: [AdaBelief Optimizer: Adapting Stepsizes by the Belief in Observed Gradients](https://arxiv.org/pdf/2010.07468.pdf)
 """
@@ -15,7 +15,7 @@ import json
 from toolkit4nlp.backend import keras, K
 from toolkit4nlp.tokenizers import Tokenizer
 from toolkit4nlp.models import build_transformer_model, Model
-from toolkit4nlp.optimizers import AdaBelif
+from toolkit4nlp.optimizers import AdaBelief
 from toolkit4nlp.utils import pad_sequences, DataGenerator
 from toolkit4nlp.layers import Input, Lambda, Dense, Layer
 
@@ -115,7 +115,7 @@ model = Model(bert.inputs, x)
 
 model.compile(
     loss='sparse_categorical_crossentropy',
-    optimizer=AdaBelif(2e-5),  # 用足够小的学习率
+    optimizer=AdaBelief(2e-5),  # 用足够小的学习率
     metrics=['sparse_categorical_accuracy'],
 )
 model.summary()

@@ -92,8 +92,8 @@ class Adam(keras.optimizers.Optimizer):
         return dict(list(basic_config.items()) + list(config.items()))
 
 
-class AdaBelif(keras.optimizers.Optimizer):
-    """AdaBelif optimizer.
+class AdaBelief(keras.optimizers.Optimizer):
+    """AdaBelief optimizer.
 
     Default parameters follow those provided in the original paper.
 
@@ -117,7 +117,7 @@ class AdaBelif(keras.optimizers.Optimizer):
         self.initial_decay = kwargs.pop('decay', 0.0)
         self.epsilon = kwargs.pop('epsilon', K.epsilon())
         learning_rate = kwargs.pop('lr', learning_rate)
-        super(AdaBelif, self).__init__(**kwargs)
+        super(AdaBelief, self).__init__(**kwargs)
         with K.name_scope(self.__class__.__name__):
             self.iterations = K.variable(0, dtype='int64', name='iterations')
             self.learning_rate = K.variable(learning_rate, name='learning_rate')
@@ -187,7 +187,7 @@ class AdaBelif(keras.optimizers.Optimizer):
                   'decay': float(K.get_value(self.decay)),
                   'epsilon': self.epsilon,
                   'amsgrad': self.amsgrad}
-        base_config = super(AdaBelif, self).get_config()
+        base_config = super(AdaBelief, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
 
@@ -485,7 +485,7 @@ else:
 
 custom_objects = {
     'Adam': Adam,
-    'AdaBelif': AdaBelif,
+    'AdaBelief': AdaBelief,
 }
 
 keras.utils.get_custom_objects().update(custom_objects)

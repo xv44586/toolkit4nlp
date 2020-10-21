@@ -4,7 +4,7 @@
 # @Email   : xv44586@gmail.com
 # @File    : classification_tnews_pet.py
 """
-将分类任务转换为完形填空，Pattern-Exploiting
+Pattern-Exploiting：将分类任务转换为完形填空
 ref:
  [Exploiting Cloze Questions for Few Shot Text Classification and Natural Language Inference](https://arxiv.org/pdf/2001.07676.pdf)
  [It’s Not Just Size That Matters: Small Language Models Are Also Few-Shot Learners](https://arxiv.org/pdf/2009.07118.pdf)
@@ -30,9 +30,6 @@ config_path = '/home/mingming.xu/pretrain/NLP/chinese_L-12_H-768_A-12/bert_confi
 checkpoint_path = '/home/mingming.xu/pretrain/NLP/chinese_L-12_H-768_A-12/bert_model.ckpt'
 dict_path = '/home/mingming.xu/pretrain/NLP/chinese_L-12_H-768_A-12/vocab.txt'
 
-# config_path = '/home/mingming.xu/pretrain/NLP/nezha_base_wwm/bert_config.json'
-# checkpoint_path = '/home/mingming.xu/pretrain/NLP/nezha_base_wwm/model.ckpt'
-# dict_path = '/home/mingming.xu/pretrain/NLP/nezha_base_wwm/vocab.txt'
 desc2label = {
     'news_agriculture': '农业',
     'news_car': '汽车',
@@ -51,6 +48,7 @@ desc2label = {
     'news_world': '国际'
 }
 labels = list(desc2label.values())
+
 
 def load_data(filename):
     D = []
@@ -159,7 +157,7 @@ model = build_transformer_model(config_path=config_path,
                                 checkpoint_path=checkpoint_path,
                                 with_mlm=True)
 
-target_in = Input(shape=(None, ))
+target_in = Input(shape=(None,))
 output = CrossEntropy(1)([target_in, model.output])
 
 train_model = Model(model.inputs + [target_in], output)
