@@ -191,6 +191,78 @@ class AdaBelief(keras.optimizers.Optimizer):
         return dict(list(base_config.items()) + list(config.items()))
 
 
+class AdaBeliefTf(keras.optimizers.Optimizer):
+    """tf.keras 版
+    """
+
+    def __init__(
+            self,
+            learning_rate=0.001,
+            beta_1=0.9,
+            beta_2=0.999,
+            epsilon=1e-6,
+            bias_correct=True,
+            **kwargs
+    ):
+        kwargs['name'] = kwargs.get('name') or 'AdaBelief'
+        super(AdaBeliefTf, self).__init__(**kwargs)
+        self._set_hyper('learning_rate', learning_rate)
+        self._set_hyper('beta_1', beta_1)
+        self._set_hyper('beta_2', beta_2)
+        self.epsilon = epsilon or K.epislon()
+        self.bias_correct = bias_correct
+
+    def _create_slots(self, var_list):
+        for var in var_list:
+            self.add_slot(var, 'm')
+            self.add_slot(var, 'v')
+
+    def _resource_apply(self, grad, var, indices=None):
+        # 准备变量
+        var_dtype = var.dtype.base_dtype
+        lr_t = self._decayed_lr(var_dtype)
+        m = self.get_slot(var, 'm')
+        v = self.get_slot(var, 'v')
+        beta_1_t = self._get_hyper('beta_1', var_dtype)
+        beta_2_t = self._get_hyper('beta_2', var_dtype)
+        epsilon_t = K.cast(self.epsilon, var_dtype)
+        local_step = K.cast(self.iterations + 1, var_dtype)
+        beta_1_t_power = K.pow(beta_1_t, local_step)
+        beta_2_t_power = K.pow(beta_2_t, local_step)
+
+        # 更新公式
+
+        m_t = K.update(m, beta_1_t * m + (1 - beta_1_t) * grad)
+        v_t = K.update(v, beta_2_t * v + (1 - beta_2_t) * (grad - m_t) ** 2)
+
+        # 返回算子
+        with tf.control_dependencies([m_t, v_t]):
+            if self.bias_correct:
+                m_t = m_t / (1.0 - beta_1_t_power)
+                v_t = v_t / (1.0 - beta_2_t_power)
+            var_t = var - lr_t * m_t / (K.sqrt(v_t) + epsilon_t)
+            return K.update(var, var_t)
+
+    def _resource_apply_dense(self, grad, var):
+        return self._resource_apply(grad, var)
+
+    def _resource_apply_sparse(self, grad, var, indices):
+        grad = tf.IndexedSlices(grad, indices, K.shape(var))
+        grad = tf.convert_to_tensor(grad)
+        return self._resource_apply_dense(grad, var)
+
+    def get_config(self):
+        config = {
+            'learning_rate': self._serialize_hyperparameter('learning_rate'),
+            'beta_1': self._serialize_hyperparameter('beta_1'),
+            'beta_2': self._serialize_hyperparameter('beta_2'),
+            'epsilon': self.epsilon,
+            'bias_correct': self.bias_correct,
+        }
+        base_config = super(AdaBeliefTf, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
+
+
 def export_to_custom_objects(extend_with_func):
     def new_extend_with_func(BaseOptimizer, name=None):
         NewOptimizer = extend_with_func(BaseOptimizer)
@@ -480,6 +552,7 @@ if is_tf_keras:
     extend_with_piecewise_linear_lr = extend_with_piecewise_linear_lr_tf2
     extend_with_gradient_accumulation = extend_with_gradient_accumulation_tf2
     extend_with_weight_decay = extend_with_weight_decay_tf2
+    AdaBelief = AdaBeliefTf
 else:
     Adam = keras.optimizers.Adam
 
