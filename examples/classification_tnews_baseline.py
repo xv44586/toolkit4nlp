@@ -6,6 +6,8 @@
 """
 tnews baseline:
 bert-12 acc: 56.6
+
+tnews: (https://github.com/CLUEbenchmark/CLUE)
 """
 import json
 from tqdm import tqdm
