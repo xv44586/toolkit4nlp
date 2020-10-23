@@ -4,7 +4,7 @@
 # @Email   : xv44586@gmail.com
 # @File    : classification_pet_seq2seq.py
 """
-seq2seq用来分类，解码时不直接全字符匹配，而采用pet 相同方式，缩小解码空间
+seq2seq用来分类，解码时不使用beam search而采用pet 的方式解码，缩小解码空间，提高准确率
 
 """
 import json
@@ -21,6 +21,7 @@ from toolkit4nlp.layers import *
 num_classes = 16
 maxlen = 128
 batch_size = 32
+max_label = 2
 
 # BERT base
 config_path = '/home/mingming.xu/pretrain/NLP/chinese_L-12_H-768_A-12/bert_config.json'
@@ -44,7 +45,6 @@ desc2label = {
     'news_travel': '旅游',
     'news_world': '国际'
 }
-labels = list(desc2label.values())
 
 
 def load_data(filename):
@@ -94,24 +94,26 @@ class data_generator(DataGenerator):
                 label_token_ids = tokenizer.encode(label_des, maxlen=max_label + 2)[0][1:-1]
                 token_ids = text_token_ids + label_token_ids
                 segment_ids = [0] * len(text_token_ids) + [1] * len(label_token_ids)
-            #                 batch_labels.append(label_token_ids)
+                batch_labels.append([label])
 
             batch_token_ids.append(token_ids)
             batch_segment_ids.append(segment_ids)
-            batch_labels.append([label])
 
             if len(batch_token_ids) == self.batch_size or is_end:
                 batch_token_ids = pad_sequences(batch_token_ids)
                 batch_segment_ids = pad_sequences(batch_segment_ids)
                 batch_labels = pad_sequences(batch_labels)
-                #                 if self.seq2seq:
-                #                     yield [batch_token_ids, batch_segment_ids], None
-                #                 else:
-                yield [batch_token_ids, batch_segment_ids], batch_labels
+                if self.seq2seq:
+                    yield [batch_token_ids, batch_segment_ids], None
+                else:
+                    yield [batch_token_ids, batch_segment_ids], batch_labels
+
                 batch_token_ids, batch_segment_ids, batch_labels = [], [], []
 
 
 id2label = dict([(d[1], d[2]) for d in train_data])
+labels = [i[1] for i in sorted(id2label.items())]
+
 # label prob
 char1 = [w[0] for w in labels]
 char2 = [w[1] for w in labels]
@@ -124,74 +126,36 @@ train_generator = data_generator(data=train_data[:2000], batch_size=batch_size, 
 valid_generator = data_generator(data=valid_data, batch_size=batch_size)
 
 
-class TotalLoss(Loss):
-    "计算两部分loss：seq2seq的交叉熵，probs与true label的交叉熵"
-
+class CrossEntropy(Loss):
     def compute_loss(self, inputs, mask=None):
-        seq2seq_loss = self.compute_loss_of_seq2seq(inputs, mask)
-        #         classification_loss = self.compute_loss_of_classification(inputs, mask)
-        self.add_metric(seq2seq_loss, name='seq2seq_loss')
-        #         self.add_metric(classification_loss, name='classification_loss')
-        #         acc = self.compute_classification_acc(inputs, mask)
-        #         self.add_metric(acc, name='acc')
-        return seq2seq_loss
-
-    def compute_loss_of_seq2seq(self, inputs, mask=None):
-        y_true, y_mask, _, y_pred = inputs
-        y_true = y_true[:, 1:]  # 目标token
-        y_pred = y_pred[:, :-1]  # 错开一位
-        y_mask = y_mask[:, 1:]  # 利用segment_ids mask掉第一个segment
+        y_true, y_mask, y_pred = inputs
+        y_true = y_true[:, 1:]  # 目标token_ids
+        y_mask = y_mask[:, 1:]  # segment_ids，刚好指示了要预测的部分
+        y_pred = y_pred[:, :-1]  # 预测序列，错开一位
         loss = K.sparse_categorical_crossentropy(y_true, y_pred)
         loss = K.sum(loss * y_mask) / K.sum(y_mask)
-        return loss * 0.2
-
-    def compute_loss_of_classification(self, inputs, mask=None):
-        _, _, y_pred, _, y_true = inputs
-        return K.sparse_categorical_crossentropy(y_true, y_pred)
-
-    def compute_classification_acc(self, inputs, mask=None):
-        _, _, y_pred, _, y_true = inputs
-        equal = K.equal(K.cast(K.argmax(y_pred, axis=-1), 'int32'), K.cast(y_true, 'int32'))
-        return K.cast(equal, K.floatx()) / K.cast(K.shape(y_true)[0], K.floatx())
+        return loss
 
 
-bert = build_transformer_model(checkpoint_path=checkpoint_path,
-                               config_path=config_path,
-                               with_pool='linear',
-                               application='unilm',
-                               keep_tokens=keep_tokens,
-                               return_keras_model=False)
-label_inputs = Input(shape=(None,), name='label_inputs')
+# build model
+model = build_transformer_model(
+    config_path,
+    checkpoint_path,
+    application='unilm',
+    keep_tokens=keep_tokens
+)
 
-pooler = bert.model.outputs[0]
-classification_output = Dense(units=num_classes, activation='softmax', name='classifier')(pooler)
-classifier = Model(bert.model.inputs, classification_output)
+output = CrossEntropy(2)(model.inputs + model.outputs)
 
-seq2seq = Model(bert.model.inputs, bert.model.outputs[1])
-
-outputs = TotalLoss([2])(bert.model.inputs + bert.model.outputs)
-# outputs = Dense(num_classes, activation='softmax')(outputs)
-train_model = Model(bert.model.inputs, [classification_output, outputs])
-
-train_model.summary()
-train_model.compile(loss=['sparse_categorical_crossentropy', None], optimizer=Adam(1e-5), metrics=['acc'])
-
-
-def evaluate(val_data=valid_generator):
-    total = 0.
-    right = 0.
-    for x, y_true in tqdm(val_data):
-        y_pred = classifier.predict(x).argmax(axis=-1)
-        y_true = y_true[:, 0]
-        total += len(y_true)
-        right += (y_true == y_pred).sum()
-    print(total, right)
-    return right / total
+model = Model(model.inputs, output)
+model.compile(optimizer=Adam(1e-5))
+model.summary()
 
 
 def pet_decode(inputs):
+    # 减少搜索空间，只在label可能的token上进行搜索
     token_ids, segment_ids = tokenizer.encode(inputs, maxlen=maxlen)
-    p1 = seq2seq.predict([[token_ids], [segment_ids]])[:, -1, char1_idx]
+    p1 = model.predict([[token_ids], [segment_ids]])[:, -1, char1_idx]
 
     char1_token_ids = np.expand_dims(char1_idx, 1)
     segment_ids = segment_ids + [1]
@@ -199,40 +163,57 @@ def pet_decode(inputs):
     token_ids = np.tile(token_ids, (len(labels), 1))
     token_ids = np.concatenate([token_ids, char1_token_ids], axis=1)
     segment_ids = np.tile(segment_ids, (len(labels), 1))
-    p2 = seq2seq.predict([token_ids, segment_ids])[:, -1, char2_idx]
-    label = np.diagonal(p1 * p2).argmax()
-    return label
+    p2 = model.predict([token_ids, segment_ids])[:, -1, char2_idx]
+    p1 = np.reshape(p1, (-1, 1))
+    label_idx = np.diagonal(p1 + p2).argmax()
+    return labels[label_idx]
 
 
-def evaluate_pet(data=valid_data):
+def just_show():
+    idx = np.random.choice(len(train_data), 3)
+    for i in idx:
+        sample = train_data[i]
+        print(u'context：%s' % sample[0])
+        print(u'label id：%s ' % sample[1])
+        print(u'label desc: %s' % sample[2])
+        new_label = pet_decode(sample[0])
+        print('pet label: %s ' % new_label)
+
+
+def evaluate(data=valid_data):
     total, right = 0., 0.
-    for x, y_true, desc in tqdm(data):
+    for x, _, y_true in tqdm(data):
         total += 1
         pred = pet_decode(x)
-        if pred == int(y_true):
+        if pred == y_true:
             right += 1
-    return total / right
+    return right / total
 
 
 class Evaluator(keras.callbacks.Callback):
     def __init__(self, save_path='best_model.weights'):
-        self.best_val_acc = 0.
+        self.lowest_loss = 1e10
         self.save_path = save_path
 
     def on_epoch_end(self, epoch, logs=None):
-        val_acc = evaluate_pet(valid_data)
-        if val_acc > self.best_val_acc:
-            self.best_val_acc = val_acc
+        just_show()
+        if logs['loss'] <= self.lowest_loss:
+            self.lowest_loss = logs['loss']
             self.model.save_weights(self.save_path)
 
-        print('current acc :{}, best val acc: {}'.format(val_acc, self.best_val_acc))
+        print('current loss :{}, lowest loss: {}'.format(logs['loss'], self.lowest_loss))
 
 
 if __name__ == '__main__':
+    # zero-shot
+    zero_acc = evaluate(valid_data)
+    print('zero shot acc: ', zero_acc)
+
+    # few shot
     evaluator = Evaluator()
-    train_model.fit_generator(train_generator.generator(),
-                              steps_per_epoch=len(train_generator),
-                              epochs=5,
-                              callbacks=[evaluator])
-    # 切换解码方式评估
-    evaluate(train_data)
+    model.fit_generator(train_generator.generator(),
+                        steps_per_epoch=len(train_generator),
+                        epochs=5,
+                        callbacks=[evaluator])
+    acc = evaluate()
+    print('few shot acc: ', acc)
