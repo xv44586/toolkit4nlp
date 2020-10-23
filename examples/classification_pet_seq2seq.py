@@ -6,6 +6,8 @@
 """
 seq2seq用来分类，解码时不使用beam search而采用pet 的方式解码，缩小解码空间，提高准确率
 
+zero-shot acc: 17.2
+few-shot acc: 52.82
 """
 import json
 from tqdm import tqdm
@@ -213,7 +215,7 @@ if __name__ == '__main__':
     evaluator = Evaluator()
     model.fit_generator(train_generator.generator(),
                         steps_per_epoch=len(train_generator),
-                        epochs=5,
+                        epochs=10,
                         callbacks=[evaluator])
     acc = evaluate()
     print('few shot acc: ', acc)
