@@ -164,10 +164,10 @@ train_model = Model(model.inputs + [target_in], output)
 train_model.compile(optimizer=Adam(1e-5))
 train_model.summary()
 
+label_ids = np.array([tokenizer.encode(l)[0][1:-1] for l in labels])
+
 
 def evaluate(data):
-    label_ids = np.array([tokenizer.encode(l)[0][1:-1] for l in labels])
-    #     print(label_ids)
     total, right = 0., 0.
     for x, _ in tqdm(data):
         x, y_true = x[:2], x[2]
@@ -195,6 +195,10 @@ class Evaluator(keras.callbacks.Callback):
 
 
 if __name__ == '__main__':
+    # zero-shot
+    zero_acc = evaluate(valid_generator)
+    print('zero shot acc: ', zero_acc)
+    # few shot
     evaluator = Evaluator()
     train_model.fit_generator(train_generator.generator(),
                               steps_per_epoch=len(train_generator),
