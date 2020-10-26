@@ -352,9 +352,8 @@ class Tokenizer(BasicTokenizer):
         if second_text is None:
             second_tokens = None
         elif isinstance(second_text, basestring):
-            start_index = 0
             if pattern == 'S*E*E':
-                start_index = int(bool(self._token_start)) + 1
+                start_index = int(bool(self._token_start))
             second_tokens = self.tokenize(second_text)[start_index:]
         else:
             second_tokens = second_text
