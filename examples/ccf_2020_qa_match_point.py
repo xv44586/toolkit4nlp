@@ -75,7 +75,7 @@ class data_generator(DataGenerator):
                 r_segment_ids = [1] * len(r_token_ids)
                 r_mask_ids = [0] * (len(r_token_ids) - 1) + [1]  # 每句的句尾sep作为特征
                 r_label_ids = r_mask_ids[:]
-                if int(label) == 0:
+                if label and int(label) == 0:
                     r_label_ids[-1] = 0
 
                 token_ids += r_token_ids
@@ -174,7 +174,7 @@ x = PointLoss(0)([output, label_inputs, m_inputs])
 train_model = Model(bert.inputs + [label_inputs, m_inputs], x)
 
 infer_model = Model(bert.inputs, output)
-
+train_model.compile(optimizer=Adam(5e-5))
 train_model.summary()
 
 
@@ -217,7 +217,7 @@ def evaluate(data=valid_generator):
         P += y_true.sum()
         TP += ((y_pred + y_true) > 1).sum()
 
-    print(P, R, TP)
+    # print(P, R, TP)
     pre = TP / R
     rec = TP / P
 
@@ -262,7 +262,7 @@ if __name__ == '__main__':
     train_model.fit_generator(
         train_generator.generator(),
         steps_per_epoch=len(train_generator),
-        epochs=10,
+        epochs=5,
         callbacks=[evaluator]
     )
     # load best weights
