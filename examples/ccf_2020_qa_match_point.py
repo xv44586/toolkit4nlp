@@ -4,6 +4,7 @@
 # @Email   : xv44586@gmail.com
 # @File    : ccf_2020_qa_match_point.py
 """
+ 比赛：[房产行业聊天问答匹配](https://www.datafountain.cn/competitions/474/)
 主要思路：将reply顺序拼接到query后面，利用每个reply的[SEP]token做二分类
 best val f1: 0.794
 A 榜: 0.756
