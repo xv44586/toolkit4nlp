@@ -238,6 +238,7 @@ class BERT(Transformer):
                  with_pool=False,  # 是否包含pooler部分
                  with_nsp=False,  # 是否包含NSP部分
                  with_mlm=False,  # 是否包含mlm部分
+                 type_vocab_size=2,  # segment type 的种类
                  **kwargs
                  ):
         super(BERT, self).__init__(**kwargs)
@@ -246,6 +247,7 @@ class BERT(Transformer):
         self.with_pool = with_pool
         self.with_nsp = with_nsp
         self.with_mlm = with_mlm
+        self.type_vocab_size = type_vocab_size
         # nsp need pooler
         if with_nsp and not with_pool:
             self.with_pool = True
@@ -275,7 +277,7 @@ class BERT(Transformer):
         segment_embedding = self.apply(s,
                                        Embedding,
                                        name='Embedding-Segment',
-                                       input_dim=2,
+                                       input_dim=self.type_vocab_size,
                                        output_dim=self.embedding_size,
                                        embeddings_initializer=self.initializer,
                                        )
