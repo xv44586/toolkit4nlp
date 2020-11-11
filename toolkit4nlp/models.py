@@ -520,6 +520,19 @@ class NEZHA(BERT):
 
     ref: [NEZHA: Neural Contextualized Representation for Chinese Language Understanding](http://arxiv.org/abs/1909.00204)
     """
+
+    def __init__(self,
+                 external_embedding_size=None,
+                 external_embedding_weights=None,
+                 **kwargs):
+        """
+        增加引入外部embedding
+        """
+
+        super(NEZHA, self).__init__(**kwargs)
+        self.external_embedding_size = external_embedding_size  # 外部embedding 输出维度
+        self.external_embedding_weights = external_embedding_weights  # 外部embedding 初始化权重
+
     def apply_embeddings(self, inputs):
         """
         embedding 是 token embedding 与 segment embedding 的和
@@ -540,7 +553,26 @@ class NEZHA(BERT):
                                        output_dim=self.embedding_size,
                                        embeddings_initializer=self.initializer,
                                        )
-        x = self.apply([token_embedding, segment_embedding], Add, name='Embedding-Token-Segment')
+        token_with_segment = self.apply([token_embedding, segment_embedding], Add, name='Embedding-Token-Segment')
+
+        # add External knowledge
+        if self.external_embedding_size:
+            external_embedding = self.apply(x,
+                                            Embedding,
+                                            name='Embedding-External',
+                                            input_dim=self.vocab_size,
+                                            output_dim=self.external_embedding_size,
+                                            weights=[self.external_embedding_weights]
+                                            )
+            if self.external_embedding_size != self.embedding_size:
+                external_embedding = self.apply(external_embedding,
+                                                Dense,
+                                                name='External-Embedding-Mapping',
+                                                units=self.embedding_size,
+                                                kernel_initializer=self.initializer)
+            x = self.apply([token_with_segment, external_embedding], Add, name='Embedding-Token-Segment-External')
+        else:
+            x = token_with_segment
 
         x = self.apply(x,
                        LayerNormalization,
