@@ -4,6 +4,19 @@
  为了方便自己学习与理解一些东西，实现一些自己的想法
 
 ## Update info:
+  - <strong>2020.11.10</strong> NEZHA增加external_embedding_weights, 可以通过该参数将其他信息融合进NEZHA Token-Embedding,具体使用方式：
+  ```python
+  from toolkit4nlp.models import build_transformer_model
+  # 自己构造 embeddings_matrix，与vocabulary 对应
+  config_path = ''
+  checkpoint_path = ''
+  embeddings_matrix = None
+  nezha = build_transformer_model(
+  config_path=checkpoint_path,
+  checkpoint_path=checkpoint_path, 
+  model='nezha', external_embedding_size=100,
+   external_embedding_weights=embeddings_matrix)
+```
   - <strong>2020.10.19</strong> AdaBelief Optimizer 及对应example，具体代码：<a href='https://github.com/xv44586/toolkit4nlp/blob/master/examples/classification_adabelief.py'>classification use AdaBelief</a>
   - <strong>2020.10.16</strong> 增加focal loss 及对应example，具体代码：<a href='https://github.com/xv44586/toolkit4nlp/blob/master/examples/classification_focal_loss.py'>classification_focal_loss</a>
   - <strong>2020.09.27</strong> 增加NEZHA的实现，使用方法：
