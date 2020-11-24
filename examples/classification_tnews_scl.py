@@ -136,41 +136,53 @@ class SupervisedContrastiveLearning(Loss):
 
         sum_similarities = K.sum(similarities, axis=-1, keepdims=True)  # sum i != k
         scl = similarities / sum_similarities
-        tf.print(K.shape(similarities))
-        scl = K.log((scl + K.epsilon()))  # sum log
+        scl = K.log(scl + K.epsilon())  # sum log
         scl = -K.sum(scl * label_mask, axis=1, keepdims=True) / (K.sum(label_mask, axis=1, keepdims=True) + K.epsilon())
         return K.mean(scl)
 
 
 class CrossEntropy(Loss):
+    def __init__(self, alpha, **kwargs):
+        super(CrossEntropy, self).__init__(**kwargs)
+        self.alpha = alpha
+
     def compute_loss(self, inputs, mask=None):
         pred, ytrue = inputs
-        ytrue = K.cast(ytrue, K.floatx())
-        loss = K.sparse_categorical_crossentropy(ytrue, pred)
-        loss = K.mean(loss)
-        self.add_metric(loss, name='clf_loss')
-
         acc = keras.metrics.sparse_categorical_accuracy(ytrue, pred)
         self.add_metric(acc, name='clf_acc')
+
+        ytrue = K.cast(ytrue, 'int32')
+        ytrue = K.one_hot(ytrue, num_classes=num_classes)
+        ytrue = K.reshape(ytrue, (-1, num_classes))
+        loss = ytrue * K.log(pred + K.epsilon()) + (1 - ytrue) * K.log(1 - pred + K.epsilon())
+        loss = -K.mean(loss)
+        loss = loss * self.alpha
+        self.add_metric(loss, name='clf_loss')
+
         return loss
 
+    # build model
+    bert = build_transformer_model(config_path=config_path,
+                                   checkpoint_path=checkpoint_path,
+                                   num_hidden_layers=num_hidden_layers,
+                                   return_keras_model=False,
+                                   )
+    output = Lambda(lambda x: x[:, 0])(bert.output)
 
-# build model
-bert = build_transformer_model(config_path=config_path,
-                               checkpoint_path=checkpoint_path,
-                               num_hidden_layers=num_hidden_layers)
-output = Lambda(lambda x: x[:, 0])(bert.output)
+    y_in = Input(shape=(None,))
 
-y_in = Input(shape=(None,))
-scl_output = SupervisedContrastiveLearning(alpha=0.05, T=0.05, output_idx=0)([output, y_in])
+    # scale_output = Dense(256, kernel_initializer=bert.initializer)(output)
+    # logits = Dense(num_classes)(output)
+    scl_output = SupervisedContrastiveLearning(alpha=0.05, T=0.05, output_idx=0)([output, y_in])
 
-clf_output = Dense(num_classes, activation='softmax')(output)
-clf_ce = CrossEntropy(0)([clf_output, y_in])
-model = Model(bert.inputs, clf_output)
-model.summary()
+    clf_output = Dense(num_classes, activation='softmax')(output)
+    clf_ce = CrossEntropy(output_idx=0, alpha=0.95)([clf_output, y_in])
+    model = Model(bert.inputs, clf_output)
+    model.summary()
 
-train_model = Model(bert.inputs + [y_in], [scl_output, clf_ce])
-train_model.compile(optimizer=Adam(lr))
+    train_model = Model(bert.inputs + [y_in], [scl_output, clf_ce])
+    train_model.compile(optimizer=Adam(lr))
+
 
 if __name__ == '__main__':
     evaluator = Evaluator()
@@ -178,3 +190,19 @@ if __name__ == '__main__':
                               steps_per_epoch=len(train_generator),
                               epochs=epochs,
                               callbacks=[evaluator])
+
+    # tsne
+    from sklearn.manifold import TSNE
+    import matplotlib.pyplot as plt
+
+    f = K.function(bert.inputs, output)
+
+    d, _ = val_generator.take()
+    x, y = d[:2], d[-1]
+
+    logits = f(x)
+    tsne = TSNE(n_components=2, learning_rate=100)
+    tsne.fit_transform(logits)
+
+    y = y.reshape((-1,)).tolist()
+    plt.scatter(tsne.embedding_[:, 0], tsne.embedding_[:, 1], c=y)
