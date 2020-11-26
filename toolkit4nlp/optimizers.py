@@ -316,9 +316,9 @@ def extend_with_gradient_accumulation_tf2(BaseOptimizer):
                 gradient_t = K.switch(cond, K.zeros_like(gradient_accumulation), gradient_accumulation)
                 with tf.control_dependencies([K.update(gradient_accumulation, gradient_t)]):
                     if indices is None:
-                        K.update(gradient_accumulation, gradient_accumulation + grad)
+                        gradient_t = K.update(gradient_accumulation, gradient_accumulation + grad)
                     else:
-                        self._resource_scatter_add(gradient_accumulation, indices, grad)
+                        gradient_t = self._resource_scatter_add(gradient_accumulation, indices, grad)
             return gradient_t
 
         def get_config(self):
