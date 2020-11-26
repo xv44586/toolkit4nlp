@@ -374,11 +374,12 @@ class BERT(Transformer):
         if self.with_pool:
             # pooler 提取cls向量
             x = self.apply(x, layer=Lambda, name='Pooler', function=lambda x: x[:, 0])
+            pool_activation = 'tanh' if self.with_pool is True else self.with_pool
             x = self.apply(x,
                            layer=Dense,
                            name='Pooler-Dense',
                            units=self.hidden_size,
-                           activation='tanh',
+                           activation=pool_activation,
                            kernel_initializer=self.initializer)
             if self.with_nsp:
                 # Next sentence prediction
@@ -407,7 +408,8 @@ class BERT(Transformer):
             # 重用embedding-token layer
             x = self.apply(x, Embedding, 'Embedding-Token', arguments={'mode': 'dense'})
             x = self.apply(x, BiasAdd, 'MLM-Bias')
-            x = self.apply(x, Activation, 'MLM-Activation', activation='softmax')
+            mlm_activation = 'softmax' if self.with_mlm is True else self.with_mlm
+            x = self.apply(x, Activation, 'MLM-Activation', activation=mlm_activation)
             outputs.append(x)
 
         if len(outputs) == 1:
