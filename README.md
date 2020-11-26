@@ -4,6 +4,7 @@
  为了方便自己学习与理解一些东西，实现一些自己的想法
 
 ## Update info:
+  - <strong>2020.11.26</strong> 增加pretrain + fine-tuning example, 具体代码：<a href='https://github.com/xv44586/toolkit4nlp/blob/master/examples/classification_tnews_pretrain_before_finetuning.py'>classification tnew pretrain before fine-tuning</a>
   - <strong>2020.11.10</strong> NEZHA增加external_embedding_weights, 可以通过该参数将其他信息融合进NEZHA Token-Embedding,具体使用方式：
   ```python
   from toolkit4nlp.models import build_transformer_model
