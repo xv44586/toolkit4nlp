@@ -22,6 +22,7 @@ class TrainingDataset(object):
         self.token_sep_id = tokenizer._token_end_id
         self.token_mask_id = tokenizer._token_mask_id
         self.vocab_size = tokenizer._vocab_size
+
     def process(self, corpus, record_name):
         """将语料（corpus）处理为tfrecord格式，并写入 record_name"""
         writer = tf.io.TFRecordWriter(record_name)
@@ -43,7 +44,7 @@ class TrainingDataset(object):
         :param paddings_tokens:  每个序列padding_token
         :return: instances
         """
-        
+
         starts_tokens, ends_tokens, paddings_tokens = self.get_start_end_padding_tokens()
         instances, instance = [], [[i] for i in starts_tokens]
 
@@ -272,4 +273,4 @@ if __name__ == "__main__":
     dataset = TrainingDataSetRoBERTa(tokenizer=tokenizer, word_seg=word_seg, seq_length=seq_length)
     for i in range(10):  # repeate 10 times to make 10 different ways of mask token
         for corp in tqdm(generate_corp()):
-            dataset.process(corp, record_name='../corpus_record/corppus.%i.tfrecord' %i)
+            dataset.process(corp, record_name='../corpus_record/corppus.%i.tfrecord' % i)
