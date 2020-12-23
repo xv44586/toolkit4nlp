@@ -142,21 +142,69 @@ class LayerNormalization(Layer):
     std = sqrt(mean(square(x - x_mean)) + epsilon)
     x = beta + (x - x_mean / std) * gamma
     """
+    """
+    增加Conditional，用来控制模型的表现。主要思路为通过调整center 与scale，来调整模型的输出，控制其表现。
+    condition_* 为Conditional 系列参数，当Conditional=True时生效。
+    ref: [基于Conditional Layer Normalization的条件文本生成](https://kexue.fm/archives/7124)
+    """
 
-    def __init__(self, center=True, scale=True, epsilon=None, **kwargs):
+    def __init__(self, center=True, scale=True, epsilon=None,
+                 conditional=False, condition_hidden_units=None, condition_hidden_activation='linear',
+                 condition_hidden_initializer='glorot_uniform', **kwargs):
         super(LayerNormalization, self).__init__(**kwargs)
         self.center = center
         self.scale = scale
         self.epsilon = epsilon or 1e-12
+        self.conditional = conditional
+        self.condition_hidden_units = condition_hidden_units
+        self.condition_hidden_activation = activations.get(condition_hidden_activation)
+        self.condition_hidden_initializer = initializers.get(condition_hidden_initializer)
 
     def build(self, input_shape):
         super(LayerNormalization, self).build(input_shape)
+
+        if self.conditional:
+            shape = (input_shape[0][-1], )
+        else:
+            shape = (input_shape[-1], )
+
         if self.center:
-            self.beta = self.add_weight(shape=(input_shape[-1],), initializer='zeros', name='beta')
+            self.beta = self.add_weight(shape=shape, initializer='zeros', name='beta')
         if self.scale:
-            self.gamma = self.add_weight(shape=(input_shape[-1],), initializer='ones', name='gamma')
+            self.gamma = self.add_weight(shape=shape, initializer='ones', name='gamma')
+
+        if self.conditional:
+            # hidden units 不为None，做一次维度转换
+            if self.condition_hidden_units is not None:
+                self.condition_hidden_dense = Dense(units=self.condition_hidden_units,
+                                                    activation=self.condition_hidden_activation,
+                                                    use_bias=False,
+                                                    kernel_initializer=self.condition_hidden_initializer)
+            # 用0初始化center_dense 与scale_dense ,防止扰乱原模型
+            if self.center:
+                self.beta_dense = Dense(units=shape[0], use_bias=False, kernel_initializer='zeros')
+            if self.scale:
+                self.gamma_dense = Dense(units=shape[0], use_bias=False, kernel_initializer='zeros')
 
     def call(self, inputs):
+        """
+        conditional 时， condition 放在inputs后面，[inputs, condition]
+        """
+        if self.conditional:
+            inputs, cond = inputs
+            if self.condition_hidden_units is not None:
+                cond = self.condition_hidden_dense(cond)
+            # 适配cond维度，与inputs保持一致
+            for _ in range(K.ndim(inputs) - K.ndim(cond)):
+                cond = K.expand_dims(cond, 1)
+            if self.center:
+                beta = self.beta_dense(cond) + self.beta
+            if self.scale:
+                gamma = self.gamma_dense(cond) + self.gamma
+        else:
+            beta = self.beta
+            gamma = self.gamma
+
         output = inputs
         if self.center:
             mean = K.mean(inputs, axis=-1, keepdims=True)
@@ -166,21 +214,39 @@ class LayerNormalization(Layer):
             var = K.mean(K.square(output), axis=-1, keepdims=True)
             std = K.sqrt(var + self.epsilon)
             output = output / std
-            output = output * self.gamma
+            output = output * gamma
 
         if self.center:
-            output = output + self.beta
+            output = output + beta
 
         return output
 
     def compute_mask(self, inputs, mask=None):
+        if self.conditional:
+            masks = mask if mask is not None else []
+            masks = [K.expand_dims(m, 0) for m in masks if m is not None]
+            if len(masks) == 0:
+                return None
+            else:
+                return K.all(K.concatenate(masks, axis=0), axis=0)
+
         return mask
+
+    def compute_output_shape(self, input_shape):
+        if self.conditional:
+            return input_shape[0]
+        else:
+            return input_shape
 
     def get_config(self):
         base_config = super(LayerNormalization, self).get_config()
         base_config.update({"center": self.center,
                             "scale": self.scale,
-                            "epsilon": self.epsilon})
+                            "epsilon": self.epsilon,
+                            "conditional": self.conditional,
+                            "condition_hidden_units": self.condition_hidden_units,
+                            "condition_hidden_activation": activations.serialize(self.condition_hidden_activation),
+                            "condition_hidden_initializer": initializers.serialize(self.condition_hidden_initializer)})
         return base_config
 
 

@@ -61,15 +61,28 @@ class Transformer(object):
         self.keep_tokens = keep_tokens
         self.built = False
 
-    def build(self, **kwargs):
+    def build(self,
+              layer_norm_cond=None,
+              layer_norm_cond_hidden_size=None,
+              layer_norm_cond_hidden_act=None,
+              additional_input_layers=None,
+              **kwargs):
         """构建模型
+        layer_norm_*为实现conditional layer normalization时使用。
+        additional_input_layers 为新增的输入
         """
         if self.built:
             return None
 
         # inputs
         inputs = self.get_inputs()
-        self.set_inputs(inputs)
+        self.set_inputs(inputs, additional_input_layers)
+        # conditional layer norm
+        self.layer_norm_conds = [
+            layer_norm_cond,
+            layer_norm_cond_hidden_size,
+            layer_norm_cond_hidden_act or 'linear'
+        ]
         # call
         outputs = self.call(inputs)
         self.set_outputs(outputs)
@@ -143,7 +156,7 @@ class Transformer(object):
     def compute_attention_mask(self, inputs):
         return self.attention_mask
 
-    def set_inputs(self, inputs):
+    def set_inputs(self, inputs, additional_input_layers=None):
         """设置input 和 inputs
         """
         if inputs is None:
@@ -152,6 +165,11 @@ class Transformer(object):
             inputs = [inputs]
 
         inputs = inputs[:]
+        if additional_input_layers is not None:
+            if not isinstance(additional_input_layers, list):
+                additional_input_layers = [additional_input_layers]
+            inputs.extend(additional_input_layers)
+
         self.inputs = inputs
         if len(inputs) > 1:
             self.input = inputs
@@ -227,6 +245,13 @@ class Transformer(object):
                 saver = tf.train.Saver()
                 saver.save(sess, checkpoint_path, write_meta_graph=False)
 
+    def simplify(self, inputs):
+        """过滤列表中的None"""
+        inputs = [i for i in inputs if i is not None]
+        if len(inputs) == 1:
+            return inputs[0]
+        return inputs
+
 
 class BERT(Transformer):
     """
@@ -266,6 +291,9 @@ class BERT(Transformer):
         """token_embedding + segment_embedding + position_embedding
         """
         x, s = inputs[:2]
+        # condition layer norm
+        z = self.layer_norm_conds[0]
+
         token_embedding = self.apply(inputs=x,
                                      layer=Embedding,
                                      name='Embedding-Token',
@@ -290,8 +318,12 @@ class BERT(Transformer):
                        embeddings_initializer=self.initializer,
                        merge_mode='add')
 
-        x = self.apply(x,
-                       LayerNormalization,
+        x = self.apply(inputs=self.simplify([x, z]),
+                       layer=LayerNormalization,
+                       conditional=(z is not None),
+                       condition_hidden_units=self.layer_norm_conds[1],
+                       condition_hidden_activation=self.layer_norm_conds[2],
+                       condition_hidden_initializer=self.initializer,
                        name='Embedding-Norm')
         x = self.apply(x,
                        Dropout,
@@ -315,6 +347,7 @@ class BERT(Transformer):
         attention_mask = self.compute_attention_mask(idx)
 
         x_pre, x = inputs, [inputs, inputs, inputs]
+        z = self.layer_norm_conds[0]
         arguments = {'a_mask': None}
         if attention_mask is not None:
             arguments['a_mask'] = True
@@ -339,8 +372,12 @@ class BERT(Transformer):
                        name='%s-Add' % attention_name
                        )
 
-        x = self.apply(x,
-                       LayerNormalization,
+        x = self.apply(inputs=self.simplify([x,z]),
+                       layer=LayerNormalization,
+                       conditional=(z is not None),
+                       condition_hidden_units=self.layer_norm_conds[1],
+                       condition_hidden_activation=self.layer_norm_conds[2],
+                       condition_hidden_initializer=self.initializer,
                        name='%s-Norm' % attention_name,
                        )
 
@@ -360,7 +397,13 @@ class BERT(Transformer):
         x = self.apply([x_pre, x],
                        Add,
                        name='%s-Add' % feed_forward_name)
-        x = self.apply(x, LayerNormalization, name='%s-Norm' % feed_forward_name)
+        x = self.apply(inputs=self.simplify([x,z]),
+                       layer=LayerNormalization,
+                       conditional=(z is not None),
+                       condition_hidden_units=self.layer_norm_conds[1],
+                       condition_hidden_activation=self.layer_norm_conds[2],
+                       condition_hidden_initializer=self.initializer,
+                       name='%s-Norm' % feed_forward_name)
         return x
 
     def apply_task_related(self, inputs):
@@ -371,6 +414,7 @@ class BERT(Transformer):
         """
         x = inputs
         outputs = [x]
+        z = self.layer_norm_conds[0]
         if self.with_pool:
             # pooler 提取cls向量
             x = self.apply(x, layer=Lambda, name='Pooler', function=lambda x: x[:, 0])
@@ -401,9 +445,13 @@ class BERT(Transformer):
                            units=self.embedding_size,
                            activation=self.hidden_act,
                            kernel_initializer=self.initializer)
-            x = self.apply(x,
-                           LayerNormalization,
-                           'MLM-Norm',
+            x = self.apply(inputs=self.simplify([x,z]),
+                       layer=LayerNormalization,
+                       conditional=(z is not None),
+                       condition_hidden_units=self.layer_norm_conds[1],
+                       condition_hidden_activation=self.layer_norm_conds[2],
+                       condition_hidden_initializer=self.initializer,
+                           name='MLM-Norm',
                            )
             # 重用embedding-token layer
             x = self.apply(x, Embedding, 'Embedding-Token', arguments={'mode': 'dense'})
@@ -540,6 +588,7 @@ class NEZHA(BERT):
         embedding 是 token embedding 与 segment embedding 的和
         """
         x, s = inputs[:2]
+        z = self.layer_norm_conds[0]
         token_embedding = self.apply(inputs=x,
                                      layer=Embedding,
                                      name='Embedding-Token',
@@ -576,8 +625,12 @@ class NEZHA(BERT):
         else:
             x = token_with_segment
 
-        x = self.apply(x,
-                       LayerNormalization,
+        x = self.apply(inputs=self.simplify([x,z]),
+                       layer=LayerNormalization,
+                       conditional=(z is not None),
+                       condition_hidden_units=self.layer_norm_conds[1],
+                       condition_hidden_activation=self.layer_norm_conds[2],
+                       condition_hidden_initializer=self.initializer,
                        name='Embedding-Norm')
         x = self.apply(x,
                        Dropout,
@@ -602,6 +655,7 @@ class NEZHA(BERT):
         position_bias = self.compute_position_bias(inputs)
 
         x_pre, x = inputs, [inputs, inputs, inputs, position_bias]  # 加入相对位置编码
+        z = self.layer_norm_conds[0]
         arguments = {'a_mask': None, 'position_bias': 'relative'}
         if attention_mask is not None:
             arguments['a_mask'] = True
@@ -626,8 +680,12 @@ class NEZHA(BERT):
                        name='%s-Add' % attention_name
                        )
 
-        x = self.apply(x,
-                       LayerNormalization,
+        x = self.apply(inputs=self.simplify([x,z]),
+                       layer=LayerNormalization,
+                       conditional=(z is not None),
+                       condition_hidden_units=self.layer_norm_conds[1],
+                       condition_hidden_activation=self.layer_norm_conds[2],
+                       condition_hidden_initializer=self.initializer,
                        name='%s-Norm' % attention_name,
                        )
 
@@ -647,13 +705,18 @@ class NEZHA(BERT):
         x = self.apply([x_pre, x],
                        Add,
                        name='%s-Add' % feed_forward_name)
-        x = self.apply(x, LayerNormalization, name='%s-Norm' % feed_forward_name)
+        x = self.apply(inputs=self.simplify([x,z]),
+                       layer=LayerNormalization,
+                       conditional=(z is not None),
+                       condition_hidden_units=self.layer_norm_conds[1],
+                       condition_hidden_activation=self.layer_norm_conds[2],
+                       condition_hidden_initializer=self.initializer,
+                       name='%s-Norm' % feed_forward_name)
         return x
 
     def compute_position_bias(self, inputs):
         """计算相对位置编码"""
         if self.position_bias is None:
-
             x = inputs
             self.position_bias = self.apply(
                 inputs=[x, x],
