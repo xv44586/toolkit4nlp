@@ -159,9 +159,9 @@ class StudentDataGenerator(DataGenerator):
     """数据生成器
     """
 
-    def __iter__(self):
+    def __iter__(self, shuffle=False):
         batch_token_ids, batch_segment_ids, batch_labels, batch_logits = [], [], [], []
-        for is_end, (text, label, logits) in self.get_sample():
+        for is_end, (text, label, logits) in self.get_sample(shuffle):
             token_ids, segment_ids = tokenizer.encode(text, maxlen=maxlen)
             batch_token_ids.append(token_ids)
             batch_segment_ids.append(segment_ids)
@@ -238,7 +238,7 @@ if __name__ == '__main__':
     # student_data_generator = StudentDataGenerator(new_data, batch_size)
 
     # create new datasets
-    new_data = [[d[0], d[1], y_train_logits[i].tolist()] for i, d in enumerate(train_data)]
+    new_data = [[d[0], d[1], y_soften[i].tolist()] for i, d in enumerate(train_data)]
     student_data_generator = StudentDataGenerator(new_data, batch_size)
 
     # check soften labels accuracy
