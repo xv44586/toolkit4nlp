@@ -18,6 +18,7 @@
   model='nezha', external_embedding_size=100,
    external_embedding_weights=embeddings_matrix)
 ```
+  - <strong>2020.11.3</strong> 增加ccf 2020 qa match baseline：<a href='https://github.com/xv44586/toolkit4nlp/blob/master/examples/ccf_2020_qa_match_pair.py'>ccf_2020_qa_match_pair</a>和<a href='https://github.com/xv44586/toolkit4nlp/blob/master/examples/ccf_2020_qa_match_point.py'>ccf_2020_qa_match_point</a>
   - <strong>2020.10.19</strong> AdaBelief Optimizer 及对应example，具体代码：<a href='https://github.com/xv44586/toolkit4nlp/blob/master/examples/classification_adabelief.py'>classification use AdaBelief</a>
   - <strong>2020.10.16</strong> 增加focal loss 及对应example，具体代码：<a href='https://github.com/xv44586/toolkit4nlp/blob/master/examples/classification_focal_loss.py'>classification_focal_loss</a>
   - <strong>2020.09.27</strong> 增加NEZHA的实现，使用方法：
