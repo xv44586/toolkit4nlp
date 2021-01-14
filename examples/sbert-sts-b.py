@@ -197,13 +197,38 @@ para = {
 opt = Opt(**para)
 model.compile(loss='sparse_categorical_crossentropy', optimizer=opt, metrics=['acc'])
 
+
+class Evaluator(keras.callbacks.Callback):
+    def __init__(self, score_type='pearson', eval_steps=1000, save_path='best.weights'):
+        self.score_type = score_type
+        self.save_path = save_path
+        self.best_score = 0.
+        self.eval_steps = eval_steps
+
+    def on_train_batch_end(self, batches, logs=None):
+        if (batches + 1) % self.eval_steps == 0:
+            p, s = evaluate(stsb_dev)
+            if self.score_type == 'pearson':
+                score = p
+            else:
+                score = s
+            if score > self.best_score:
+                self.best_score = score
+                model.save_weights(self.save_path)
+            print('steps is: {}, score is:{}, best score is: {}'.format(batches + 1, score, self.best_score))
+
+
 if __name__ == '__main__':
     p, r = evaluate(stsb_train)
     print('before training, Pearson correlation : {},spearman rank correlation: {}'.format(p, r))
+    save_path = 'best.weights'
+    evaluator = Evaluator(save_path=save_path)
     model.fit_generator(train_generator.generator(),
                         epochs=epochs,
                         steps_per_epoch=len(train_generator),
                         )
 
+    # load best weights
+    model.load_weights(save_path)
     p, r = evaluate(stsb_train)
     print('after training, Pearson correlation : {},spearman rank correlation: {}'.format(p, r))
