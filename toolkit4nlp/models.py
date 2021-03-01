@@ -868,6 +868,109 @@ def extend_with_unilm(BaseModel):
     return UniLM
 
 
+class ALBERT(BERT):
+    def apply_transformer_layers(self, inputs, index):
+        """
+        Att -->  Dropout --> Add --> LN --> FFN --> Dropout --> Add --> LN
+        """
+        attention_name = 'Transformer-MultiHeadSelfAttention'
+        feed_forward_name = 'Transformer-FeedForward'
+        attention_mask = self.compute_attention_mask(index)
+
+        x_pre, x = inputs, [inputs, inputs, inputs]
+        z = self.layer_norm_conds[0]
+        arguments = {'a_mask': None}
+        if attention_mask is not None:
+            arguments['a_mask'] = True
+            x.append(attention_mask)
+
+        # self-attention
+        x = self.apply(x,
+                       MultiHeadAttention,
+                       name=attention_name,
+                       head_nums=self.num_attention_heads,
+                       head_size=self.attention_head_size,
+                       arguments=arguments,
+                       kernel_initializer=self.initializer)
+
+        x = self.apply(x,
+                       Dropout,
+                       name='%s-Dropout' % attention_name,
+                       rate=self.dropout_rate)
+
+        x = self.apply([x_pre, x],
+                       Add,
+                       name='%s-Add' % attention_name
+                       )
+
+        x = self.apply(inputs=self.simplify([x, z]),
+                       layer=LayerNormalization,
+                       conditional=(z is not None),
+                       condition_hidden_units=self.layer_norm_conds[1],
+                       condition_hidden_activation=self.layer_norm_conds[2],
+                       condition_hidden_initializer=self.initializer,
+                       name='%s-Norm' % attention_name,
+                       )
+
+        # feedforward
+        x_pre = x
+        x = self.apply(x,
+                       FeedForward,
+                       name=feed_forward_name,
+                       units=self.intermediate_size,
+                       activation=self.hidden_act,
+                       kernel_initializer=self.initializer
+                       )
+        x = self.apply(x,
+                       Dropout,
+                       name='%s-Dropout' % feed_forward_name,
+                       rate=self.dropout_rate)
+        x = self.apply([x_pre, x],
+                       Add,
+                       name='%s-Add' % feed_forward_name)
+        x = self.apply(inputs=self.simplify([x, z]),
+                       layer=LayerNormalization,
+                       conditional=(z is not None),
+                       condition_hidden_units=self.layer_norm_conds[1],
+                       condition_hidden_activation=self.layer_norm_conds[2],
+                       condition_hidden_initializer=self.initializer,
+                       name='%s-Norm' % feed_forward_name)
+        return x
+
+    def variable_mapping(self):
+        mapping = super(ALBERT, self).variable_mapping()
+
+        prefix = 'bert/encoder/transformer/group_0/inner_group_0/'
+        mapping.update({
+            'Transformer-MultiHeadSelfAttention': [
+                prefix + 'attention_1/self/query/kernel',
+                prefix + 'attention_1/self/query/bias',
+                prefix + 'attention_1/self/key/kernel',
+                prefix + 'attention_1/self/key/bias',
+                prefix + 'attention_1/self/value/kernel',
+                prefix + 'attention_1/self/value/bias',
+                prefix + 'attention_1/output/dense/kernel',
+                prefix + 'attention_1/output/dense/bias',
+            ],
+            'Transformer-MultiHeadSelfAttention-Norm': [
+                prefix + 'LayerNorm/beta',
+                prefix + 'LayerNorm/gamma',
+            ],
+            'Transformer-FeedForward': [
+                prefix + 'ffn_1/intermediate/dense/kernel',
+                prefix + 'ffn_1/intermediate/dense/bias',
+                prefix + 'ffn_1/intermediate/output/dense/kernel',
+                prefix + 'ffn_1/intermediate/output/dense/bias',
+            ],
+            'Transformer-FeedForward-Norm': [
+                prefix + 'LayerNorm_1/beta',
+                prefix + 'LayerNorm_1/gamma',
+            ],
+        })
+
+        return mapping
+
+
 def build_transformer_model(
         config_path=None,
         checkpoint_path=None,
@@ -893,7 +996,8 @@ def build_transformer_model(
         'reberta': BERT,
         'nezha': NEZHA,
         'electra': ELECTRA,
-        'dbert': DBERT
+        'albert': ALBERT,
+        'dbert': DBERT,
     }
 
     if isinstance(model, six.string_types):
