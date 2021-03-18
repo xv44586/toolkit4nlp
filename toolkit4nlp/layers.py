@@ -3,7 +3,7 @@
 # @Date     : 2020/06/01
 # @Author   : mingming.xu
 # @Email    : xv44586@gmail.com
-
+import numpy as np
 import tensorflow as tf
 
 from toolkit4nlp.backend import K, keras
@@ -64,7 +64,7 @@ class MultiHeadAttention(Layer):
         """
         多头注意力
         :param inputs: [q, k, v, a_mask, position_bias]
-        :param mask: [q_mask, v_mask],
+        :param mask: [q_mask, k_mask, v_mask],
             q_mask 对query序列进行mask，针对padding；v_mask对value序列进行mask，防止看到某些位置value，如padding
         :param a_mask: Boolean，是否对attention进行mask
         :param position_bias: type of position bias， 使用指定类型的位置编码对attention里的位置进行偏移
@@ -508,6 +508,127 @@ class RelativePositionEmbedding(Layer):
             'embedding_initializer': initializers.serialize(self.embedding_initializer)
         }
         return dict(list(base_config.items()) + list(config.items()))
+
+
+class RelativePositionEmbeddingT5(RelativePositionEmbedding):
+    """Google T5的相对位置编码
+    来自论文：https://arxiv.org/abs/1910.10683
+    """
+    def __init__(
+        self,
+        input_dim,
+        output_dim,
+        max_distance=128,
+        bidirectional=True,
+        embeddings_initializer='zeros',
+        **kwargs
+    ):
+        super(RelativePositionEmbeddingT5,
+              self).__init__(input_dim, output_dim, **kwargs)
+        self.max_distance = max_distance
+        self.bidirectional = bidirectional
+
+    def compute_position_ids(self, inputs):
+        """T5的相对位置分桶（直接翻译自官方T5源码）
+        i-i:   0 1 2 3 4 5 6 7 8 9 10 11 12 13 14...
+        f(i-j):0 1 2 3 4 5 6 7 8 8 8  8  9   9  9 ...
+        """
+        q, v = inputs
+        # 计算位置差
+        q_idxs = K.arange(0, K.shape(q)[1], dtype='int32')
+        q_idxs = K.expand_dims(q_idxs, 1)
+        v_idxs = K.arange(0, K.shape(v)[1], dtype='int32')
+        v_idxs = K.expand_dims(v_idxs, 0)
+        pos_ids = v_idxs - q_idxs
+        # 后处理操作
+        num_buckets, max_distance = self.input_dim, self.max_distance
+        ret = 0
+        n = -pos_ids
+        if self.bidirectional:
+            num_buckets //= 2
+            ret += K.cast(K.less(n, 0), 'int32') * num_buckets
+            n = K.abs(n)
+        else:
+            n = K.maximum(n, 0)
+        # now n is in the range [0, inf)
+        max_exact = num_buckets // 2
+        is_small = K.less(n, max_exact)
+        val_if_large = max_exact + K.cast(
+            K.log(K.cast(n, K.floatx()) / max_exact) /
+            np.log(max_distance / max_exact) * (num_buckets - max_exact),
+            'int32',
+        )
+        val_if_large = K.minimum(val_if_large, num_buckets - 1)
+        ret += K.switch(is_small, n, val_if_large)
+        return ret
+
+    def get_config(self):
+        config = {
+            'max_distance': self.max_distance,
+            'bidirectional': self.bidirectional,
+        }
+        base_config = super(RelativePositionEmbeddingT5, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
+
+
+class AbsolutePositionEmbeddingTUPE(Layer):
+    """
+    TUPE式位置与位置交互的位置编码
+    出自论文：http://arxiv.org/abs/2006.15595
+    """
+    def __init__(self,
+                 input_dim,
+                 output_dim,
+                 num_attention_heads,
+                 attn_scale_factor=2,
+                 relative_position_bias=True,
+                 embeddings_initializer='zeros',
+                 **kwargs
+                 ):
+        super(AbsolutePositionEMbeddingTUPE, self).__init__(**kwargs)
+        self.input_dim = input_dim
+        self.output_dim = output_dim
+        self.num_attention_heads = num_attention_heads
+        self.attn_scale_factor = attn_scale_factor
+        self.relative_position_bias = relative_position_bias
+        self.embedding_initializer = initializers.get(embeddings_initializer)
+        self.pos_scaling = float(self.output_dim / num_attention_heads * self.attn_scale_factor) ** -0.5
+
+    def build(self, input_shape):
+        self.embeddings = self.add_weight(name='absolutePositionEmbedding',
+                                          shape=(self.input_dim, self.output_dim),
+                                          initializer=self.embedding_initializer, )
+        self.q_dense = Dense(self.output_dim, use_bias=False)
+        self.k_dense = Dense(self.output_dim, use_bias=False)
+        self.pos_ln = LayerNormalization()
+
+    def call(self, inputs, **kwargs):
+        q, v = inputs
+        seq_len = K.shape(q)[1]
+        position_ids = K.arange(0, seq_len + 1, 'int32')  # 增加一个虚拟头结点来解耦cls
+        x = K.gather(self.embeddings, position_ids)
+        x = self.pos_ln(x)
+        q = self.q_dense(x) * self.pos_scaling
+        k = self.k_dense(x)
+        q = K.reshape(q, (seq_len+1, self.num_attention_heads, -1))
+        k = K.reshape(k, (seq_len+1, self.num_attention_heads, -1))
+
+        abs_pos_bias = tf.einsum('jhd,khd->hjk', q, k)
+        # p_0 \dot p_0 is  cla to others
+        cls_2_other = abs_pos_bias[:, 0, 0]
+        # p_1 \dot p_1 is others to cls
+        other_2_cls = abs_pos_bias[:, 1, 1]
+        # offset
+        abs_pos_bias = abs_pos_bias[:, 1:, 1:]
+        abs_pos_bias[:, :, 0] = K.reshape(other_2_cls, (-1, 1))
+        abs_pos_bias[:, 0, :] = K.reshape(cls_2_other, (-1, 1))
+        if self.relative_position_bias:
+            rel_pos_bias = self.compute_rel_pos_bias(inputs)
+            abs_pos_bias += rel_pos_bias
+        return abs_pos_bias
+
+    def compute_rel_pos_bias(self, inputs):
+        pass
 
 
 class DGCNN(Layer):
