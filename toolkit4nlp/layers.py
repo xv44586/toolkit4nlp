@@ -125,10 +125,17 @@ class MultiHeadAttention(Layer):
         return [output, attention_bias]
 
     def compute_output_shape(self, input_shape):
-        return (input_shape[0][0], input_shape[0][1], self.output_dim)
+        output_shape = (input_shape[0][0], input_shape[0][1], self.output_dim)
+        if self.with_residual_attention:
+            att_shape = (input_shape[0][0], self.head_nums, input_shape[0][1], input_shape[1][1])
+            return [output_shape, att_shape]
+
+        return output_shape
 
     def compute_mask(self, inputs, mask=None):
         if mask is not None:
+            if self.with_residual_attention:
+                return [mask[0], None]
             return mask[0]
 
     def get_config(self):
