@@ -253,6 +253,22 @@ class Transformer(object):
     def compute_attention_bias(self, inputs):
         return self.attention_bias
 
+    def apply_attention(self, inputs, attention_name, arguments):
+        # attention 层有很多变体，所以单独抽出来一个方法，来适应不同变体
+        x = self.apply(inputs,
+                       MultiHeadAttention,
+                       name=attention_name,
+                       head_nums=self.num_attention_heads,
+                       head_size=self.attention_head_size,
+                       arguments=arguments,
+                       kernel_initializer=self.initializer,
+                       with_residual_attention=self.with_residual_attention)
+
+        if self.with_residual_attention:
+            x, att_scores = x
+            self.attention_bias = att_scores
+        return x
+
 
 class BERT(Transformer):
     """
@@ -355,13 +371,14 @@ class BERT(Transformer):
             x.append(attention_bias)
 
         # self-attention
-        x = self.apply(x,
-                       MultiHeadAttention,
-                       name=attention_name,
-                       head_nums=self.num_attention_heads,
-                       head_size=self.attention_head_size,
-                       arguments=arguments,
-                       kernel_initializer=self.initializer)
+        x = self.apply_attention(x, attention_name, arguments)
+        # x = self.apply(x,
+        #                MultiHeadAttention,
+        #                name=attention_name,
+        #                head_nums=self.num_attention_heads,
+        #                head_size=self.attention_head_size,
+        #                arguments=arguments,
+        #                kernel_initializer=self.initializer)
 
         x = self.apply(x,
                        Dropout,
@@ -373,7 +390,7 @@ class BERT(Transformer):
                        name='%s-Add' % attention_name
                        )
 
-        x = self.apply(inputs=self.simplify([x,z]),
+        x = self.apply(inputs=self.simplify([x, z]),
                        layer=LayerNormalization,
                        conditional=(z is not None),
                        condition_hidden_units=self.layer_norm_conds[1],
@@ -398,7 +415,7 @@ class BERT(Transformer):
         x = self.apply([x_pre, x],
                        Add,
                        name='%s-Add' % feed_forward_name)
-        x = self.apply(inputs=self.simplify([x,z]),
+        x = self.apply(inputs=self.simplify([x, z]),
                        layer=LayerNormalization,
                        conditional=(z is not None),
                        condition_hidden_units=self.layer_norm_conds[1],
@@ -446,12 +463,12 @@ class BERT(Transformer):
                            units=self.embedding_size,
                            activation=self.hidden_act,
                            kernel_initializer=self.initializer)
-            x = self.apply(inputs=self.simplify([x,z]),
-                       layer=LayerNormalization,
-                       conditional=(z is not None),
-                       condition_hidden_units=self.layer_norm_conds[1],
-                       condition_hidden_activation=self.layer_norm_conds[2],
-                       condition_hidden_initializer=self.initializer,
+            x = self.apply(inputs=self.simplify([x, z]),
+                           layer=LayerNormalization,
+                           conditional=(z is not None),
+                           condition_hidden_units=self.layer_norm_conds[1],
+                           condition_hidden_activation=self.layer_norm_conds[2],
+                           condition_hidden_initializer=self.initializer,
                            name='MLM-Norm',
                            )
             # 重用embedding-token layer
@@ -626,7 +643,7 @@ class NEZHA(BERT):
         else:
             x = token_with_segment
 
-        x = self.apply(inputs=self.simplify([x,z]),
+        x = self.apply(inputs=self.simplify([x, z]),
                        layer=LayerNormalization,
                        conditional=(z is not None),
                        condition_hidden_units=self.layer_norm_conds[1],
@@ -662,14 +679,15 @@ class NEZHA(BERT):
             arguments['a_bias'] = True
             x.insert(3, attention_bias)
 
+        x = self.apply_attention(x, attention_name, arguments)
         # self-attention
-        x = self.apply(x,
-                       MultiHeadAttention,
-                       name=attention_name,
-                       head_nums=self.num_attention_heads,
-                       head_size=self.attention_head_size,
-                       arguments=arguments,
-                       kernel_initializer=self.initializer)
+        # x = self.apply(x,
+        #                MultiHeadAttention,
+        #                name=attention_name,
+        #                head_nums=self.num_attention_heads,
+        #                head_size=self.attention_head_size,
+        #                arguments=arguments,
+        #                kernel_initializer=self.initializer)
 
         x = self.apply(x,
                        Dropout,
@@ -681,7 +699,7 @@ class NEZHA(BERT):
                        name='%s-Add' % attention_name
                        )
 
-        x = self.apply(inputs=self.simplify([x,z]),
+        x = self.apply(inputs=self.simplify([x, z]),
                        layer=LayerNormalization,
                        conditional=(z is not None),
                        condition_hidden_units=self.layer_norm_conds[1],
@@ -706,7 +724,7 @@ class NEZHA(BERT):
         x = self.apply([x_pre, x],
                        Add,
                        name='%s-Add' % feed_forward_name)
-        x = self.apply(inputs=self.simplify([x,z]),
+        x = self.apply(inputs=self.simplify([x, z]),
                        layer=LayerNormalization,
                        conditional=(z is not None),
                        condition_hidden_units=self.layer_norm_conds[1],
@@ -869,6 +887,34 @@ def extend_with_unilm(BaseModel):
     return UniLM
 
 
+def extend_with_residual_attention(BaseModel):
+    """添加当前attention scores 与前一层attention scores的直通路"""
+
+    class RealFormer(BaseModel):
+        """RealFormer: https://arxiv.org/pdf/2012.11747.pdf"""
+
+        def __init__(self, *args, **kwargs):
+            super(RealFormer, self).__init__(*args, **kwargs)
+            self.with_residual_attention = True
+
+        def compute_attention_bias(self, inputs=None):
+            """
+            将所有的attention bias 相加后作为一个attention bias往后传
+            """
+            att_bias = super(RealFormer, self).compute_attention_bias(inputs)
+
+            if self.attention_bias is None:
+                att_bias = self.apply([self.attention_bias, att_bias],
+                                      Add,
+                                      name='%s-Attention-bias' % inputs,
+                                      )
+
+            self.attention_bias = att_bias
+            return att_bias
+
+    return RealFormer
+
+
 class ALBERT(BERT):
     def apply_transformer_layers(self, inputs, index):
         """
@@ -885,14 +931,15 @@ class ALBERT(BERT):
             arguments['a_bias'] = True
             x.append(attention_bias)
 
+        x = self.apply_attention(x, attention_name, arguments)
         # self-attention
-        x = self.apply(x,
-                       MultiHeadAttention,
-                       name=attention_name,
-                       head_nums=self.num_attention_heads,
-                       head_size=self.attention_head_size,
-                       arguments=arguments,
-                       kernel_initializer=self.initializer)
+        # x = self.apply(x,
+        #                MultiHeadAttention,
+        #                name=attention_name,
+        #                head_nums=self.num_attention_heads,
+        #                head_size=self.attention_head_size,
+        #                arguments=arguments,
+        #                kernel_initializer=self.initializer)
 
         x = self.apply(x,
                        Dropout,
@@ -1012,6 +1059,9 @@ def build_transformer_model(
         MODEL = extend_with_language_model(MODEL)
     elif application == 'unilm':
         MODEL = extend_with_unilm(MODEL)
+
+    if kwargs.get('with_residual_attention'):
+        MODEL = extend_with_residual_attention(MODEL)
 
     transformer = MODEL(**configs)
     transformer.build(**configs)
