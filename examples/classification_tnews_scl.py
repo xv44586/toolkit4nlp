@@ -161,27 +161,28 @@ class CrossEntropy(Loss):
 
         return loss
 
-    # build model
-    bert = build_transformer_model(config_path=config_path,
-                                   checkpoint_path=checkpoint_path,
-                                   num_hidden_layers=num_hidden_layers,
-                                   return_keras_model=False,
-                                   )
-    output = Lambda(lambda x: x[:, 0])(bert.output)
 
-    y_in = Input(shape=(None,))
+# build model
+bert = build_transformer_model(config_path=config_path,
+                               checkpoint_path=checkpoint_path,
+                               num_hidden_layers=num_hidden_layers,
+                               return_keras_model=False,
+                               )
+output = Lambda(lambda x: x[:, 0])(bert.output)
 
-    # scale_output = Dense(256, kernel_initializer=bert.initializer)(output)
-    # logits = Dense(num_classes)(output)
-    scl_output = SupervisedContrastiveLearning(alpha=0.05, T=0.05, output_idx=0)([output, y_in])
+y_in = Input(shape=(None,))
 
-    clf_output = Dense(num_classes, activation='softmax')(output)
-    clf_ce = CrossEntropy(output_idx=0, alpha=0.95)([clf_output, y_in])
-    model = Model(bert.inputs, clf_output)
-    model.summary()
+# scale_output = Dense(256, kernel_initializer=bert.initializer)(output)
+# logits = Dense(num_classes)(output)
+scl_output = SupervisedContrastiveLearning(alpha=0.05, T=0.05, output_idx=0)([output, y_in])
 
-    train_model = Model(bert.inputs + [y_in], [scl_output, clf_ce])
-    train_model.compile(optimizer=Adam(lr))
+clf_output = Dense(num_classes, activation='softmax')(output)
+clf_ce = CrossEntropy(output_idx=0, alpha=0.95)([clf_output, y_in])
+model = Model(bert.inputs, clf_output)
+model.summary()
+
+train_model = Model(bert.inputs + [y_in], [scl_output, clf_ce])
+train_model.compile(optimizer=Adam(lr))
 
 
 if __name__ == '__main__':
