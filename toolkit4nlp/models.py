@@ -255,25 +255,17 @@ class Transformer(object):
 
     def apply_attention(self, inputs, attention_name, arguments):
         # attention 层有很多变体，所以单独抽出来一个方法，来适应不同变体
+        x = self.apply(inputs,
+                       MultiHeadAttention,
+                       name=attention_name,
+                       head_nums=self.num_attention_heads,
+                       head_size=self.attention_head_size,
+                       arguments=arguments,
+                       kernel_initializer=self.initializer,
+                       with_residual_attention=self.with_residual_attention)
         if self.with_residual_attention:
-            x, att_scores = self.apply(inputs,
-                                       MultiHeadAttention,
-                                       name=attention_name,
-                                       head_nums=self.num_attention_heads,
-                                       head_size=self.attention_head_size,
-                                       arguments=arguments,
-                                       kernel_initializer=self.initializer,
-                                       with_residual_attention=self.with_residual_attention)
+            x, att_scores = x
             self.attention_bias = att_scores
-        else:
-            x = self.apply(inputs,
-                           MultiHeadAttention,
-                           name=attention_name,
-                           head_nums=self.num_attention_heads,
-                           head_size=self.attention_head_size,
-                           arguments=arguments,
-                           kernel_initializer=self.initializer,
-                           )
 
         return x
 
