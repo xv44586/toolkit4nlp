@@ -911,10 +911,10 @@ def extend_with_residual_attention(BaseModel):
             """
             att_bias = super(RealFormer, self).compute_attention_bias(inputs)
 
-            if self.attention_bias is None:
+            if self.attention_bias is not None:
                 att_bias = self.apply([self.attention_bias, att_bias],
                                       Add,
-                                      name='%s-Attention-bias' % inputs,
+                                      name='%d-Attention-bias' % inputs,
                                       )
 
             self.attention_bias = att_bias
