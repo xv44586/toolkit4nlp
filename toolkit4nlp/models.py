@@ -28,11 +28,11 @@ class Transformer(object):
                  embedding_size=None,  # embedding 层维度
                  attention_key_size=None,  # attentioin 中 Q, K 的head size
                  sequence_length=None,  # 是否固定序列长度
-                 attention_mask=None,  # attention 层mask
                  layers=None,  # 外部传人的layer
                  name=None,  # 模型名
                  prefix=None,  # layer name 的前缀
                  keep_tokens=None,  # 自定义保留token
+                 with_residual_attention=False,  # attention scores 残差
                  **kwargs):
         """
         """
@@ -53,12 +53,13 @@ class Transformer(object):
         self.dropout_rate = dropout_rate or 0
         self.embedding_size = embedding_size or hidden_size
         self.sequence_length = sequence_length
-        self.attention_mask = attention_mask
         self.position_bias = None
         self.layers = layers or {}
         self.name = name
         self.prefix = prefix or ''
         self.keep_tokens = keep_tokens
+        self.with_residual_attention = with_residual_attention
+        self.attention_bias = None  # 包含对attention 的偏移，如attention mask
         self.built = False
 
     def build(self,
@@ -152,9 +153,6 @@ class Transformer(object):
 
     def apply_task_related(self, inputs):
         raise NotImplementedError
-
-    def compute_attention_mask(self, inputs):
-        return self.attention_mask
 
     def set_inputs(self, inputs, additional_input_layers=None):
         """设置input 和 inputs
@@ -252,6 +250,9 @@ class Transformer(object):
             return inputs[0]
         return inputs
 
+    def compute_attention_bias(self, inputs):
+        return self.attention_bias
+
 
 class BERT(Transformer):
     """
@@ -344,14 +345,14 @@ class BERT(Transformer):
         """
         attention_name = 'Transformer-%d-MultiHeadSelfAttention' % idx
         feed_forward_name = 'Transformer-%d-FeedForward' % idx
-        attention_mask = self.compute_attention_mask(idx)
+        attention_bias = self.compute_attention_bias(idx)
 
         x_pre, x = inputs, [inputs, inputs, inputs]
         z = self.layer_norm_conds[0]
-        arguments = {'a_mask': None}
-        if attention_mask is not None:
-            arguments['a_mask'] = True
-            x.append(attention_mask)
+        arguments = {'a_bias': None}
+        if attention_bias is not None:
+            arguments['a_bias'] = True
+            x.append(attention_bias)
 
         # self-attention
         x = self.apply(x,
@@ -651,15 +652,15 @@ class NEZHA(BERT):
         """
         attention_name = 'Transformer-%d-MultiHeadSelfAttention' % idx
         feed_forward_name = 'Transformer-%d-FeedForward' % idx
-        attention_mask = self.compute_attention_mask(idx)
+        attention_bias = self.compute_attention_bias(idx)
         position_bias = self.compute_position_bias(inputs)
 
         x_pre, x = inputs, [inputs, inputs, inputs, position_bias]  # 加入相对位置编码
         z = self.layer_norm_conds[0]
-        arguments = {'a_mask': None, 'position_bias': 'relative'}
-        if attention_mask is not None:
-            arguments['a_mask'] = True
-            x.insert(3, attention_mask)
+        arguments = {'a_bias': None, 'position_bias': 'relative'}
+        if attention_bias is not None:
+            arguments['a_bias'] = True
+            x.insert(3, attention_bias)
 
         # self-attention
         x = self.apply(x,
@@ -808,26 +809,26 @@ def extend_with_language_model(BaseModel):
             super(LanguageModel, self).__init__(*args, **kwargs)
             self.with_mlm = self.with_mlm or True  # mlm output
 
-        def compute_attention_mask(self, inputs=None):
+        def compute_attention_bias(self, inputs=None):
             """重写attention mask 计算逻辑：全局下三角矩阵，形如：
             [[[[1, 0, 0]
             [1, 1, 0]
             [1, 1, 1]]]]
             """
-            if self.attention_mask is None:
+            if self.attention_bias is None:
                 def compute_lm_mask(segments):
                     seq_len = K.shape(segments)[1]
                     idx = K.arange(0, seq_len)
                     mask = idx[:, None] <= idx[None, :]
                     mask = K.cast(mask, K.floatx())
-                    return mask[None, None]
+                    return -(1 - mask[None, None]) * 1e12
 
-                self.attention_mask = self.apply(inputs=self.inputs[1],
+                self.attention_bias = self.apply(inputs=self.inputs[1],
                                                  layer=Lambda,
                                                  function=compute_lm_mask,
                                                  name='Attention-LM-Mask')
 
-            return self.attention_mask
+            return self.attention_bias
 
     return LanguageModel
 
@@ -842,7 +843,7 @@ def extend_with_unilm(BaseModel):
             super(UniLM, self).__init__(*args, **kwargs)
             self.with_mlm = self.with_mlm or True  # mlm output
 
-        def compute_attention_mask(self, inputs=None):
+        def compute_attention_bias(self, inputs=None):
             """重写attention mask 计算逻辑,segment 1 全部为1，segment 2 中为下三角矩阵.
             假如 输入序列为 [CLS] [seg1] [SEP] [seg2] [SEP], 对应 mask 为：
             [[1，1，1, 0, 0]
@@ -851,19 +852,19 @@ def extend_with_unilm(BaseModel):
             [1, 1, 1, 1, 0]
             [1, 1, 1, 1, 1,]]
             """
-            if self.attention_mask is None:
+            if self.attention_bias is None:
                 def compute_unilm_mask(segments):
                     idx = K.cumsum(segments, axis=1)
                     mask = idx[:, None, :] <= idx[:, :, None]
                     mask = K.cast(mask, K.floatx())
-                    return mask[:, None]
+                    return -(1 - mask[:, None]) * 1e12
 
-                self.attention_mask = self.apply(inputs=self.inputs[1],
+                self.attention_bias = self.apply(inputs=self.inputs[1],
                                                  layer=Lambda,
                                                  function=compute_unilm_mask,
                                                  name='Attention-UniLM-Attention')
 
-            return self.attention_mask
+            return self.attention_bias
 
     return UniLM
 
@@ -875,14 +876,14 @@ class ALBERT(BERT):
         """
         attention_name = 'Transformer-MultiHeadSelfAttention'
         feed_forward_name = 'Transformer-FeedForward'
-        attention_mask = self.compute_attention_mask(index)
+        attention_bias = self.compute_attention_bias(index)
 
         x_pre, x = inputs, [inputs, inputs, inputs]
         z = self.layer_norm_conds[0]
-        arguments = {'a_mask': None}
-        if attention_mask is not None:
-            arguments['a_mask'] = True
-            x.append(attention_mask)
+        arguments = {'a_bias': None}
+        if attention_bias is not None:
+            arguments['a_bias'] = True
+            x.append(attention_bias)
 
         # self-attention
         x = self.apply(x,

@@ -26,7 +26,7 @@ class MultiHeadAttention(Layer):
     """
 
     def __init__(self, head_nums, head_size, key_size=None, use_bias=True, attention_scale=True,
-                 kernel_initializer='glorot_uniform', **kwargs):
+                 kernel_initializer='glorot_uniform', with_residual_attention=False, **kwargs):
         super(MultiHeadAttention, self).__init__(**kwargs)
         self.head_nums = head_nums
         self.head_size = head_size
@@ -35,6 +35,7 @@ class MultiHeadAttention(Layer):
         self.use_bias = use_bias
         self.attention_scale = attention_scale
         self.kernel_initializer = initializers.get(kernel_initializer)
+        self.with_residual_attention = with_residual_attention  # realformer
 
     def build(self, input_shape):
         super(MultiHeadAttention, self).build(input_shape)
@@ -60,14 +61,14 @@ class MultiHeadAttention(Layer):
             kernel_initializer=self.kernel_initializer
         )
 
-    def call(self, inputs, mask=None, a_mask=None, position_bias=None):
+    def call(self, inputs, mask=None, **kwargs):
         """
         多头注意力
-        :param inputs: [q, k, v, a_mask, position_bias]
+        :param inputs: [q, k, v, a_bias, position_bias]
         :param mask: [q_mask, k_mask, v_mask],
             q_mask 对query序列进行mask，针对padding；v_mask对value序列进行mask，防止看到某些位置value，如padding
-        :param a_mask: Boolean，是否对attention进行mask
-        :param position_bias: type of position bias， 使用指定类型的位置编码对attention里的位置进行偏移
+        :param a_bias: Boolean，是否对attention进行偏移，包括attention mask/ pre attention scores
+        :param position_bias: type of position bias， 使用指定类型的位置编码对attention里的位置信息进行偏移
         :return:
         """
         q, k, v = inputs[:3]
@@ -77,8 +78,9 @@ class MultiHeadAttention(Layer):
                 q_mask = K.cast(mask[0], K.floatx())
             if mask[2] is not None:
                 v_mask = K.cast(mask[2], K.floatx())
-        if a_mask is not None:
-            a_mask = inputs[idx]
+        attention_bias, position_bias = kwargs.get('a_bias'), kwargs.get('position_bias')
+        if attention_bias:
+            attention_bias = inputs[idx]
             idx += 1
 
         # 投影变换
@@ -102,9 +104,11 @@ class MultiHeadAttention(Layer):
 
         # value mask
         att = sequence_masking(att, v_mask, 'add', -1)
-        # attention mask
-        if a_mask is not None:
-            att = att - (1 - a_mask) * 1e12
+
+        # attention mask / residual attention scores
+        if attention_bias is not None:
+            att += attention_bias
+        attention_bias = att
 
         att = K.softmax(att)
         output = tf.einsum('bhjk,bkhd->bjhd', att, vw)
@@ -115,7 +119,10 @@ class MultiHeadAttention(Layer):
         output = self.combine_dense(output)
         # query mask
         output = sequence_masking(output, q_mask, 'mul')
-        return output
+        if not self.with_residual_attention:
+            return output
+
+        return output, attention_bias
 
     def compute_output_shape(self, input_shape):
         return (input_shape[0][0], input_shape[0][1], self.output_dim)
@@ -585,7 +592,7 @@ class AbsolutePositionEmbeddingTUPE(Layer):
                  embeddings_initializer='zeros',
                  **kwargs
                  ):
-        super(AbsolutePositionEMbeddingTUPE, self).__init__(**kwargs)
+        super(AbsolutePositionEmbeddingTUPE, self).__init__(**kwargs)
         self.input_dim = input_dim
         self.output_dim = output_dim
         self.num_attention_heads = num_attention_heads
