@@ -251,7 +251,7 @@ class Transformer(object):
         return inputs
 
     def compute_attention_bias(self, inputs):
-        return self.attention_bias
+        return None
 
     def apply_attention(self, inputs, attention_name, arguments):
         # attention 层有很多变体，所以单独抽出来一个方法，来适应不同变体
@@ -903,14 +903,14 @@ def extend_with_residual_attention(BaseModel):
             """
             att_bias = super(RealFormer, self).compute_attention_bias(inputs)
 
-            if self.attention_bias is not None:
+            if self.attention_bias is not None and att_bias is not None:
                 att_bias = self.apply([self.attention_bias, att_bias],
                                       Add,
                                       name='%d-Attention-bias' % inputs,
                                       )
 
-            self.attention_bias = att_bias
-            return att_bias
+            self.attention_bias = att_bias or self.attention_bias
+            return self.attention_bias
 
     return RealFormer
 
