@@ -7,7 +7,7 @@
 残差式attention RealFormer实验，由于结构与BERT上有差异，直接加载BERT权重后fine-tuning对比是不公平的，不过为了简单，
 所以选了pet这种“预训练”+“fine-tuning" 一体的模型结构实验，此外，为了让模型有更多的机会调整权重，epoch设置的大一些
 
-best acc: 56.5
+best acc: 56.73
 """
 
 import json
@@ -149,7 +149,8 @@ class CrossEntropy(Loss):
 
 model = build_transformer_model(config_path=config_path,
                                 checkpoint_path=checkpoint_path,
-                                with_mlm=True)
+                                with_mlm=True,
+                                with_residual_attention=True)
 
 target_in = Input(shape=(None,))
 output = CrossEntropy(1)([target_in, model.output])
@@ -196,5 +197,5 @@ if __name__ == '__main__':
     evaluator = Evaluator()
     train_model.fit_generator(train_generator.generator(),
                               steps_per_epoch=len(train_generator),
-                              epochs=10,
+                              epochs=20,
                               callbacks=[evaluator])
