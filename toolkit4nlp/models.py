@@ -60,6 +60,7 @@ class Transformer(object):
         self.keep_tokens = keep_tokens
         self.with_residual_attention = with_residual_attention
         self.attention_bias = None  # 包含对attention 的偏移，如attention mask
+        self.attention_scores = None  # 记录attention scores，用来实现residual attention
         self.built = False
 
     def build(self,
@@ -251,7 +252,7 @@ class Transformer(object):
         return inputs
 
     def compute_attention_bias(self, inputs):
-        return None
+        return self.attention_bias
 
     def apply_attention(self, inputs, attention_name, arguments):
         # attention 层有很多变体，所以单独抽出来一个方法，来适应不同变体
@@ -265,7 +266,7 @@ class Transformer(object):
                        with_residual_attention=self.with_residual_attention)
         if self.with_residual_attention:
             x, att_scores = x
-            self.attention_bias = att_scores
+            self.attention_scores = att_scores
 
         return x
 
@@ -899,19 +900,19 @@ def extend_with_residual_attention(BaseModel):
 
         def compute_attention_bias(self, inputs=None):
             """
-            将所有的attention bias 相加后作为一个attention bias往后传
+            将residual attention scores 加入 attention bias
             :param inputs: transformer layer idx
             """
             att_bias = super(RealFormer, self).compute_attention_bias(inputs)
 
-            if self.attention_bias is not None and att_bias is not None:
-                att_bias = self.apply([self.attention_bias, att_bias],
+            if self.attention_scores is not None and att_bias is not None:
+                att_bias = self.apply([self.attention_scores, att_bias],
                                       Add,
                                       name='Transformer-%d-Attention-bias-Add' % inputs,
                                       )
 
-            self.attention_bias = att_bias or self.attention_bias
-            return self.attention_bias
+            att_bias = att_bias if att_bias is not None else self.attention_scores
+            return att_bias
 
     return RealFormer
 
