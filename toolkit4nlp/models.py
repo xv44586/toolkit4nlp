@@ -900,13 +900,14 @@ def extend_with_residual_attention(BaseModel):
         def compute_attention_bias(self, inputs=None):
             """
             将所有的attention bias 相加后作为一个attention bias往后传
+            :param inputs: transformer layer idx
             """
             att_bias = super(RealFormer, self).compute_attention_bias(inputs)
 
             if self.attention_bias is not None and att_bias is not None:
                 att_bias = self.apply([self.attention_bias, att_bias],
                                       Add,
-                                      name='%d-Attention-bias' % inputs,
+                                      name='Transformer-%d-Attention-bias-Add' % inputs,
                                       )
 
             self.attention_bias = att_bias or self.attention_bias
