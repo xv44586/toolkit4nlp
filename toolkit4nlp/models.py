@@ -373,13 +373,6 @@ class BERT(Transformer):
 
         # self-attention
         x = self.apply_attention(x, attention_name, arguments)
-        # x = self.apply(x,
-        #                MultiHeadAttention,
-        #                name=attention_name,
-        #                head_nums=self.num_attention_heads,
-        #                head_size=self.attention_head_size,
-        #                arguments=arguments,
-        #                kernel_initializer=self.initializer)
 
         x = self.apply(x,
                        Dropout,
@@ -681,14 +674,6 @@ class NEZHA(BERT):
             x.insert(3, attention_bias)
 
         x = self.apply_attention(x, attention_name, arguments)
-        # self-attention
-        # x = self.apply(x,
-        #                MultiHeadAttention,
-        #                name=attention_name,
-        #                head_nums=self.num_attention_heads,
-        #                head_size=self.attention_head_size,
-        #                arguments=arguments,
-        #                kernel_initializer=self.initializer)
 
         x = self.apply(x,
                        Dropout,
@@ -934,14 +919,6 @@ class ALBERT(BERT):
             x.append(attention_bias)
 
         x = self.apply_attention(x, attention_name, arguments)
-        # self-attention
-        # x = self.apply(x,
-        #                MultiHeadAttention,
-        #                name=attention_name,
-        #                head_nums=self.num_attention_heads,
-        #                head_size=self.attention_head_size,
-        #                arguments=arguments,
-        #                kernel_initializer=self.initializer)
 
         x = self.apply(x,
                        Dropout,
