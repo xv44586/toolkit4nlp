@@ -145,6 +145,7 @@ class MultiHeadAttention(Layer):
                        'key_size': self.key_size,
                        'use_bias': self.use_bias,
                        'attention_scale': self.attention_scale,
+                       'with_residual_attention': self.with_residual_attention,
                        'kernel_initializer': initializers.serialize(self.kernel_initializer)})
         return config
 
