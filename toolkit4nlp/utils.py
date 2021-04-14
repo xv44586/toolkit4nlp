@@ -3,6 +3,7 @@
 # @Author  : mingming.xu
 # @Email   : xv44586@gmail.com
 # @File    : utils.py
+import re
 import numpy as np
 from abc import abstractmethod
 
@@ -382,3 +383,13 @@ def text_segmentate(text, maxlen, seps='\n', strips=None):
         return texts
     else:
         return [text]
+
+
+def string_matching(s, keywords):
+    """
+    判断是否有keyword 出现在s内
+    """
+    for k in keywords:
+        if re.search(k, s):
+            return True
+    return False

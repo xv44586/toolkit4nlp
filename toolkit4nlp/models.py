@@ -9,7 +9,7 @@ import numpy as np
 
 from toolkit4nlp.layers import *
 from keras.models import Model
-from toolkit4nlp.utils import remove_arguments
+from toolkit4nlp.utils import remove_arguments, string_matching
 
 
 class Transformer(object):
@@ -33,6 +33,7 @@ class Transformer(object):
                  prefix=None,  # layer name 的前缀
                  keep_tokens=None,  # 自定义保留token
                  with_residual_attention=False,  # attention scores 残差
+                 skip_weights_from_checkpoints=[],  # 从checkpoints中load weights 跳过的权重，会同时作用在trainable_weights 和 variables
                  **kwargs):
         """
         """
@@ -61,6 +62,7 @@ class Transformer(object):
         self.with_residual_attention = with_residual_attention
         self.attention_bias = None  # 包含对attention 的偏移，如attention mask
         self.attention_scores = None  # 记录attention scores，用来实现residual attention
+        self.skip_weights_from_checkpoints = skip_weights_from_checkpoints
         self.built = False
 
     def build(self,
@@ -221,7 +223,10 @@ class Transformer(object):
         for layer_name, variables in mapping.items():
             weights = self.layers[layer_name].trainable_weights
             values = [self.load_variable(checkpoint, v) for v in variables]
-
+            # skip weights
+            if self.skip_weights_from_checkpoints:
+                weights = [w for w in weights if not string_matching(w.name, self.skip_weights_from_checkpoints)]
+                values = [v for v in values if not string_matching(v, self.skip_weights_from_checkpoints)]
             weights_values_pairs.extend(zip(weights, values))
 
         K.batch_set_value(weights_values_pairs)
