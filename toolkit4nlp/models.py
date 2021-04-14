@@ -222,11 +222,12 @@ class Transformer(object):
         weights_values_pairs = []
         for layer_name, variables in mapping.items():
             weights = self.layers[layer_name].trainable_weights
-            values = [self.load_variable(checkpoint, v) for v in variables]
-            # skip weights
+
+            # skip weights by names
             if self.skip_weights_from_checkpoints:
                 weights = [w for w in weights if not string_matching(w.name, self.skip_weights_from_checkpoints)]
-                values = [v for v in values if not string_matching(v, self.skip_weights_from_checkpoints)]
+                variables = [v for v in values if not string_matching(v, self.skip_weights_from_checkpoints)]
+            values = [self.load_variable(checkpoint, v) for v in variables]
             weights_values_pairs.extend(zip(weights, values))
 
         K.batch_set_value(weights_values_pairs)
