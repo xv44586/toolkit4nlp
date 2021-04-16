@@ -908,6 +908,177 @@ def extend_with_residual_attention(BaseModel):
     return RealFormer
 
 
+class ReZero(BERT):
+    def __init__(self,
+                 use_layernorm=None,  # None, pre, post, when None, then rezero
+                 init_reweight=1.,  # init of reweight
+                 reweight_trainable=True,
+                 **kwargs,
+                 ):
+        super(ReZero, self).__init__(**kwargs)
+        assert use_layernorm in [None, 'pre', 'post']
+        self.use_layernorm = use_layernorm
+        self.init_reweight = init_reweight
+        self.reweight_trainable = reweight_trainable
+
+    def apply_embeddings(self, inputs):
+        """token_embedding + segment_embedding + position_embedding
+        """
+        x, s = inputs[:2]
+        # condition layer norm
+        z = self.layer_norm_conds[0]
+
+        token_embedding = self.apply(inputs=x,
+                                     layer=Embedding,
+                                     name='Embedding-Token',
+                                     input_dim=self.vocab_size,
+                                     output_dim=self.embedding_size,
+                                     embeddings_initializer=self.initializer,
+                                     mask_zero=True
+                                     )
+        segment_embedding = self.apply(s,
+                                       Embedding,
+                                       name='Embedding-Segment',
+                                       input_dim=self.type_vocab_size,
+                                       output_dim=self.embedding_size,
+                                       embeddings_initializer=self.initializer,
+                                       )
+        token_with_seg = self.apply([token_embedding, segment_embedding], Add, name='Embedding-Token-Segment')
+        x = self.apply(token_with_seg,
+                       PositionEmbedding,
+                       name='Embedding-Position',
+                       input_dim=self.max_position,
+                       output_dim=self.embedding_size,
+                       embeddings_initializer=self.initializer,
+                       merge_mode='add')
+
+        # if pre layernorm, then delete layernorm in this block
+        if self.use_layernorm != 'pre':
+            x = self.apply(inputs=self.simplify([x, z]),
+                           layer=LayerNormalization,
+                           conditional=(z is not None),
+                           condition_hidden_units=self.layer_norm_conds[1],
+                           condition_hidden_activation=self.layer_norm_conds[2],
+                           condition_hidden_initializer=self.initializer,
+                           name='Embedding-Norm')
+        x = self.apply(x,
+                       Dropout,
+                       name='Embedding-Dropout',
+                       rate=self.dropout_rate)
+        if self.hidden_size != self.embedding_size:
+            x = self.apply(x,
+                           Dense,
+                           name='Embedding-Mapping',
+                           units=self.hidden_size,
+                           kernel_initializer=self.initializer)
+
+        return x
+
+    def apply_transformer_layers(self, inputs, idx):
+        """
+        post: Att --> Dropout --> Add --> LN --> FFN --> Dropout -->  Add --> LN
+        pre: LN --> Att --> Dropout --> Add --> LN --> FFN --> Dropout --> Add
+        rezero: Att --> ReWeight --> Dropout --> Add --> FFN -->ReWeight --> Dropout --> Add
+        """
+        attention_name = 'Transformer-%d-MultiHeadSelfAttention' % idx
+        feed_forward_name = 'Transformer-%d-FeedForward' % idx
+        attention_bias = self.compute_attention_bias(idx)
+
+        x_pre, x = inputs, inputs
+        z = self.layer_norm_conds[0]
+        arguments = {'a_bias': None}
+        if attention_bias is not None:
+            arguments['a_bias'] = True
+            x.append(attention_bias)
+
+        if self.use_layernorm == 'pre':
+            x = self.apply(inputs=self.simplify([x, z]),
+                           layer=LayerNormalization,
+                           conditional=(z is not None),
+                           condition_hidden_units=self.layer_norm_conds[1],
+                           condition_hidden_activation=self.layer_norm_conds[2],
+                           condition_hidden_initializer=self.initializer,
+                           name='%s-Norm' % attention_name,
+                           )
+
+        x = [x, x, x]
+        # self-attention
+        x = self.apply_attention(x, attention_name, arguments)
+
+        # reweight residual-connection
+        x = self.apply(x,
+                       ReWeight,
+                       name='%s-ReWeight' % attention_name,
+                       init_reweight=self.init_reweight,
+                       trainable=self.reweight_trainable
+                       )
+
+        x = self.apply(x,
+                       Dropout,
+                       name='%s-Dropout' % attention_name,
+                       rate=self.dropout_rate)
+
+        x = self.apply([x_pre, x],
+                       Add,
+                       name='%s-Add' % attention_name
+                       )
+        if self.use_layernorm == 'post':
+            x = self.apply(inputs=self.simplify([x, z]),
+                           layer=LayerNormalization,
+                           conditional=(z is not None),
+                           condition_hidden_units=self.layer_norm_conds[1],
+                           condition_hidden_activation=self.layer_norm_conds[2],
+                           condition_hidden_initializer=self.initializer,
+                           name='%s-Norm' % attention_name,
+                           )
+
+        # feedforward
+        x_pre = x
+        if self.use_layernorm == 'pre':
+            x = self.apply(inputs=self.simplify([x, z]),
+                           layer=LayerNormalization,
+                           conditional=(z is not None),
+                           condition_hidden_units=self.layer_norm_conds[1],
+                           condition_hidden_activation=self.layer_norm_conds[2],
+                           condition_hidden_initializer=self.initializer,
+                           name='%s-Norm' % feed_forward_name
+                           )
+
+        x = self.apply(x,
+                       FeedForward,
+                       name=feed_forward_name,
+                       units=self.intermediate_size,
+                       activation=self.hidden_act,
+                       kernel_initializer=self.initializer
+                       )
+
+        # reweight residual-connection
+        x = self.apply(x,
+                       ReWeight,
+                       name='%s-ReWeight' % feed_forward_name,
+                       init_reweight=self.init_reweight,
+                       trainable=self.reweight_trainable
+                       )
+        x = self.apply(x,
+                       Dropout,
+                       name='%s-Dropout' % feed_forward_name,
+                       rate=self.dropout_rate)
+
+        x = self.apply([x_pre, x],
+                       Add,
+                       name='%s-Add' % feed_forward_name)
+        if self.use_layernorm == 'post':
+            x = self.apply(inputs=self.simplify([x, z]),
+                           layer=LayerNormalization,
+                           conditional=(z is not None),
+                           condition_hidden_units=self.layer_norm_conds[1],
+                           condition_hidden_activation=self.layer_norm_conds[2],
+                           condition_hidden_initializer=self.initializer,
+                           name='%s-Norm' % feed_forward_name)
+
+        return x
+
+
 class ALBERT(BERT):
     def apply_transformer_layers(self, inputs, index):
         """
@@ -1031,6 +1202,7 @@ def build_transformer_model(
         'electra': ELECTRA,
         'albert': ALBERT,
         'dbert': DBERT,
+        'rezero': ReZero,
     }
 
     if isinstance(model, six.string_types):
