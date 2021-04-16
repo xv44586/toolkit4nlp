@@ -910,6 +910,20 @@ class Loss(Layer):
         return dict(list(base_config.items()) + list(config.items()))
 
 
+class ReWeight(Layer):
+    def __init__(self, init_reweight=0, trainable=True, **kwargs):
+        super(ReWeight, self).__init__(**kwargs)
+        self.init_reweight = init_reweight
+        self.trainable = trainable
+
+    def build(self, input_shape):
+        initializer = keras.initializers.Constant(self.init_reweight)
+        self.beta = self.add_weight(shape=(1,), initializer=initializer, name='reweight', trainable=self.trainable)
+
+    def call(self, x):
+        return x * self.beta
+
+
 custom_objects = {
     'Embedding': Embedding,
     'BiasAdd': BiasAdd,
@@ -923,7 +937,8 @@ custom_objects = {
     'DGCNN': DGCNN,
     'SinCosPositionEmbedding': SinCosPositionEmbedding,
     'Loss': Loss,
-    'RelativePositionEmbedding': RelativePositionEmbedding
+    'RelativePositionEmbedding': RelativePositionEmbedding,
+    'ReWeight': ReWeight,
 }
 
 keras.utils.get_custom_objects().update(custom_objects)
