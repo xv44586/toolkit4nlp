@@ -4,6 +4,7 @@
  为了方便自己学习与理解一些东西，实现一些自己的想法
 
 ## Update info:
+  - <strong>2021.5.1</strong> 增加ReZero 及对应的文本分类实验，实验代码: <a href='https://github.com/xv44586/toolkit4nlp/blob/master/examples/classification_tnews_rezero_pretrain_finetuning.py'>tnews_rezero_pretrain_finetuning</a>
   - <strong>2021.3.26</strong> 增加RealFormer（residual attention)及对应的文本分类实验，实验代码: <a href='https://github.com/xv44586/toolkit4nlp/blob/master/examples/classification_tnews_pet_realformer.py'>classification tnews pet realformer</a>
   - <strong>2021.1.13</strong> 增加SBERT的复现demo,具体代码：<a href='https://github.com/xv44586/toolkit4nlp/blob/master/examples/sbert-sts-b.py'>sbert-stsb</a>
   - <strong>2020.11.26</strong> 增加pretrain + fine-tuning example, 具体代码：<a href='https://github.com/xv44586/toolkit4nlp/blob/master/examples/classification_tnews_pretrain_before_finetuning.py'>classification tnew pretrain before fine-tuning</a>
