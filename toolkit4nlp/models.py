@@ -9,7 +9,7 @@ import numpy as np
 
 from toolkit4nlp.layers import *
 from keras.models import Model
-from toolkit4nlp.utils import remove_arguments, string_matching
+from toolkit4nlp.utils import remove_arguments, string_matching, insert_arguments
 
 
 class Transformer(object):
@@ -560,6 +560,147 @@ class BERT(Transformer):
                 ],
             })
 
+        return mapping
+
+
+class LM_Mask(object):
+    """
+    下三角Attention Mask，主要用于自回归语言模型
+    """
+
+    def compute_attention_bias(self, inputs=None):
+        """重写attention mask 计算逻辑：全局下三角矩阵，形如：
+        [[[[1, 0, 0]
+        [1, 1, 0]
+        [1, 1, 1]]]]
+        """
+        if self.attention_bias is None:
+            def compute_lm_mask(segments):
+                seq_len = K.shape(segments)[1]
+                idx = K.arange(0, seq_len)
+                mask = idx[:, None] <= idx[None, :]
+                mask = K.cast(mask, K.floatx())
+                return -(1 - mask[None, None]) * 1e12
+
+            self.attention_bias = self.apply(inputs=self.inputs[1],
+                                             layer=Lambda,
+                                             function=compute_lm_mask,
+                                             name='Attention-LM-Mask')
+
+        return self.attention_bias
+
+
+class UniLM(object):
+    """
+    UniLM形式的attention mask
+    """
+
+    def compute_attention_bias(self, inputs=None):
+        """重写attention mask 计算逻辑,segment 1 全部为1，segment 2 中为下三角矩阵.
+        假如 输入序列为 [CLS] [seg1] [SEP] [seg2] [SEP], 对应 mask 为：
+        [[1，1，1, 0, 0]
+        [1, 1, 1, 0, 0]
+        [1, 1, 1, 0, 0]
+        [1, 1, 1, 1, 0]
+        [1, 1, 1, 1, 1,]]
+        """
+        if self.attention_bias is None:
+            def compute_unilm_mask(segments):
+                idx = K.cumsum(segments, axis=1)
+                mask = idx[:, None, :] <= idx[:, :, None]
+                mask = K.cast(mask, K.floatx())
+                return -(1 - mask[:, None]) * 1e12
+
+            self.attention_bias = self.apply(inputs=self.inputs[1],
+                                             layer=Lambda,
+                                             function=compute_unilm_mask,
+                                             name='Attention-UniLM-Attention')
+
+        return self.attention_bias
+
+
+class GPT(LM_Mask, BERT):
+    """
+    OPENAI GPT
+    """
+    @insert_arguments(final_activation='softmax')
+    @remove_arguments('with_pool', 'with_mlm', 'with_nsp')
+    def __init__(self, **kwargs):
+        super(GPT, self).__init__(**kwargs)
+
+    def apply_embeddings(self, inputs):
+        """token_embedding + segment_embedding + position_embedding
+        与BERT 的主要区别是没有LayerNormalization
+        """
+        x, s = inputs[:2]
+        # condition layer norm
+        z = self.layer_norm_conds[0]
+
+        token_embedding = self.apply(inputs=x,
+                                     layer=Embedding,
+                                     name='Embedding-Token',
+                                     input_dim=self.vocab_size,
+                                     output_dim=self.embedding_size,
+                                     embeddings_initializer=self.initializer,
+                                     mask_zero=True
+                                     )
+        segment_embedding = self.apply(s,
+                                       Embedding,
+                                       name='Embedding-Segment',
+                                       input_dim=self.type_vocab_size,
+                                       output_dim=self.embedding_size,
+                                       embeddings_initializer=self.initializer,
+                                       )
+        token_with_seg = self.apply([token_embedding, segment_embedding], Add, name='Embedding-Token-Segment')
+        x = self.apply(token_with_seg,
+                       PositionEmbedding,
+                       name='Embedding-Position',
+                       input_dim=self.max_position,
+                       output_dim=self.embedding_size,
+                       embeddings_initializer=self.initializer,
+                       merge_mode='add')
+
+        x = self.apply(x,
+                       Dropout,
+                       name='Embedding-Dropout',
+                       rate=self.dropout_rate)
+        if self.hidden_size != self.embedding_size:
+            x = self.apply(x,
+                           Dense,
+                           name='Embedding-Mapping',
+                           units=self.hidden_size,
+                           kernel_initializer=self.initializer)
+
+        return x
+
+    def apply_task_related(self, inputs):
+        """
+        Language Model部分
+        """
+        x = inputs
+        x = self.apply(inputs=x,
+                       layer=Embedding,
+                       arguments={'mode': 'dense'},
+                       name='Embedding-Token')
+        x = self.apply(inputs=x,
+                       layer=Activation,
+                       activation=self.final_activation,
+                       name='LM-Actication'
+                       )
+        return x
+
+    def load_variable(self, checkpoint, name):
+        variable = super(GPT, self).load_variable(checkpoint, name)
+        if name == 'gpt/embeddings/word_embeddings':
+            return self.load_embeddings(variable)
+        else:
+            return variable
+
+    def variable_mapping(self):
+        mapping = super(GPT, self).variable_mapping()
+        mapping = {
+            k: [i.replace('bert/','gpt/').replace('encoder', 'transformer') for i in v] for k, v in mapping.items()
+        }
         return mapping
 
 
