@@ -288,6 +288,7 @@ class BERT(Transformer):
                  with_nsp=False,  # 是否包含NSP部分
                  with_mlm=False,  # 是否包含mlm部分
                  type_vocab_size=2,  # segment type 的种类
+                 shared_segment_embeddings=False,  # segment 与 token 是否共用embedding
                  **kwargs
                  ):
         super(BERT, self).__init__(**kwargs)
@@ -297,44 +298,57 @@ class BERT(Transformer):
         self.with_nsp = with_nsp
         self.with_mlm = with_mlm
         self.type_vocab_size = type_vocab_size
+        self.shared_segment_embeddings=shared_segment_embeddings
         # nsp need pooler
         if with_nsp and not with_pool:
             self.with_pool = True
 
     def get_inputs(self):
+        # 新增type_vocab_size，来过滤segment-inputs
         token_in = self.apply(layer=Input,
                               name='Input-Token',
                               shape=(self.sequence_length,))
-        segment_in = self.apply(layer=Input,
+        inputs = [token_in]
+        if self.type_vocab_size > 0:
+            segment_in = self.apply(layer=Input,
                                 name='Input-Segment',
                                 shape=(self.sequence_length,))
+            inputs.append(segment_in)
 
-        return [token_in, segment_in]
+        return inputs
 
     def apply_embeddings(self, inputs):
         """token_embedding + segment_embedding + position_embedding
         """
-        x, s = inputs[:2]
+        inputs = inputs[:]
+        x = inputs.pop(0)
+        if self.type_vocab_size > 0:
+            s = inputs.pop(0)
         # condition layer norm
         z = self.layer_norm_conds[0]
 
-        token_embedding = self.apply(inputs=x,
-                                     layer=Embedding,
-                                     name='Embedding-Token',
-                                     input_dim=self.vocab_size,
-                                     output_dim=self.embedding_size,
-                                     embeddings_initializer=self.initializer,
-                                     mask_zero=True
-                                     )
-        segment_embedding = self.apply(s,
-                                       Embedding,
-                                       name='Embedding-Segment',
-                                       input_dim=self.type_vocab_size,
-                                       output_dim=self.embedding_size,
-                                       embeddings_initializer=self.initializer,
-                                       )
-        token_with_seg = self.apply([token_embedding, segment_embedding], Add, name='Embedding-Token-Segment')
-        x = self.apply(token_with_seg,
+        x = self.apply(inputs=x,
+                     layer=Embedding,
+                     name='Embedding-Token',
+                     input_dim=self.vocab_size,
+                     output_dim=self.embedding_size,
+                     embeddings_initializer=self.initializer,
+                     mask_zero=True
+                     )
+        if self.type_vocab_size > 0:
+            if self.shared_segment_embeddings:
+                name = 'Embedding-Token'
+            else:
+                name = 'Embedding-Segment'
+            s = self.apply(s,
+                           Embedding,
+                           name=name,
+                           input_dim=self.type_vocab_size,
+                           output_dim=self.embedding_size,
+                           embeddings_initializer=self.initializer,
+                                           )
+            x = self.apply([x, s], Add, name='Embedding-Token-Segment')
+        x = self.apply(x,
                        PositionEmbedding,
                        name='Embedding-Position',
                        input_dim=self.max_position,
@@ -578,11 +592,11 @@ class LM_Mask(object):
             def compute_lm_mask(segments):
                 seq_len = K.shape(segments)[1]
                 idx = K.arange(0, seq_len)
-                mask = idx[:, None] <= idx[None, :]
+                mask = idx[None, :] <= idx[:, None]
                 mask = K.cast(mask, K.floatx())
                 return -(1 - mask[None, None]) * 1e12
 
-            self.attention_bias = self.apply(inputs=self.inputs[1],
+            self.attention_bias = self.apply(inputs=self.inputs[0],
                                              layer=Lambda,
                                              function=compute_lm_mask,
                                              name='Attention-LM-Mask')
@@ -590,7 +604,7 @@ class LM_Mask(object):
         return self.attention_bias
 
 
-class UniLM(object):
+class UniLM_Mask(object):
     """
     UniLM形式的attention mask
     """
@@ -629,30 +643,38 @@ class GPT(LM_Mask, BERT):
         super(GPT, self).__init__(**kwargs)
 
     def apply_embeddings(self, inputs):
-        """token_embedding + segment_embedding + position_embedding
+        """token_embedding + segment_embedding + position_embedding, 其中 segment_embedding 共用 token_embedding
         与BERT 的主要区别是没有LayerNormalization
         """
-        x, s = inputs[:2]
-        # condition layer norm
-        z = self.layer_norm_conds[0]
+        inputs = inputs[:]
+        x = inputs.pop(0)
+        if self.type_vocab_size > 0:
+            s = inputs.pop(0)
 
-        token_embedding = self.apply(inputs=x,
-                                     layer=Embedding,
-                                     name='Embedding-Token',
-                                     input_dim=self.vocab_size,
-                                     output_dim=self.embedding_size,
-                                     embeddings_initializer=self.initializer,
-                                     mask_zero=True
-                                     )
-        segment_embedding = self.apply(s,
-                                       Embedding,
-                                       name='Embedding-Segment',
-                                       input_dim=self.type_vocab_size,
-                                       output_dim=self.embedding_size,
-                                       embeddings_initializer=self.initializer,
-                                       )
-        token_with_seg = self.apply([token_embedding, segment_embedding], Add, name='Embedding-Token-Segment')
-        x = self.apply(token_with_seg,
+        x = self.apply(inputs=x,
+                     layer=Embedding,
+                     name='Embedding-Token',
+                     input_dim=self.vocab_size,
+                     output_dim=self.embedding_size,
+                     embeddings_initializer=self.initializer,
+                     mask_zero=True
+                     )
+
+        if self.type_vocab_size > 0:
+            if self.shared_segment_embeddings:
+                name = 'Embedding-Token'
+            else:
+                name = 'Embedding-Segment'
+
+            s = self.apply(s,
+                           Embedding,
+                           name=name,
+                           input_dim=self.type_vocab_size,
+                           output_dim=self.embedding_size,
+                           embeddings_initializer=self.initializer,
+                           )
+            x = self.apply([x, s], Add, name='Embedding-Token-Segment')
+        x = self.apply(x,
                        PositionEmbedding,
                        name='Embedding-Position',
                        input_dim=self.max_position,
@@ -955,31 +977,10 @@ def extend_with_language_model(BaseModel):
     增加下三角mask矩阵，作为语言模型使用
     """
 
-    class LanguageModel(BaseModel):
+    class LanguageModel(LM_Mask, BaseModel):
         def __init__(self, *args, **kwargs):
             super(LanguageModel, self).__init__(*args, **kwargs)
             self.with_mlm = self.with_mlm or True  # mlm output
-
-        def compute_attention_bias(self, inputs=None):
-            """重写attention mask 计算逻辑：全局下三角矩阵，形如：
-            [[[[1, 0, 0]
-            [1, 1, 0]
-            [1, 1, 1]]]]
-            """
-            if self.attention_bias is None:
-                def compute_lm_mask(segments):
-                    seq_len = K.shape(segments)[1]
-                    idx = K.arange(0, seq_len)
-                    mask = idx[:, None] <= idx[None, :]
-                    mask = K.cast(mask, K.floatx())
-                    return -(1 - mask[None, None]) * 1e12
-
-                self.attention_bias = self.apply(inputs=self.inputs[1],
-                                                 layer=Lambda,
-                                                 function=compute_lm_mask,
-                                                 name='Attention-LM-Mask')
-
-            return self.attention_bias
 
     return LanguageModel
 
@@ -987,35 +988,12 @@ def extend_with_language_model(BaseModel):
 def extend_with_unilm(BaseModel):
     """添加UniLM mask"""
 
-    class UniLM(BaseModel):
+    class UniLM(UniLM_Mask, BaseModel):
         """UnilM-V1: https://arxiv.org/pdf/1905.03197.pdf"""
 
         def __init__(self, *args, **kwargs):
             super(UniLM, self).__init__(*args, **kwargs)
             self.with_mlm = self.with_mlm or True  # mlm output
-
-        def compute_attention_bias(self, inputs=None):
-            """重写attention mask 计算逻辑,segment 1 全部为1，segment 2 中为下三角矩阵.
-            假如 输入序列为 [CLS] [seg1] [SEP] [seg2] [SEP], 对应 mask 为：
-            [[1，1，1, 0, 0]
-            [1, 1, 1, 0, 0]
-            [1, 1, 1, 0, 0]
-            [1, 1, 1, 1, 0]
-            [1, 1, 1, 1, 1,]]
-            """
-            if self.attention_bias is None:
-                def compute_unilm_mask(segments):
-                    idx = K.cumsum(segments, axis=1)
-                    mask = idx[:, None, :] <= idx[:, :, None]
-                    mask = K.cast(mask, K.floatx())
-                    return -(1 - mask[:, None]) * 1e12
-
-                self.attention_bias = self.apply(inputs=self.inputs[1],
-                                                 layer=Lambda,
-                                                 function=compute_unilm_mask,
-                                                 name='Attention-UniLM-Attention')
-
-            return self.attention_bias
 
     return UniLM
 
@@ -1344,6 +1322,7 @@ def build_transformer_model(
         'albert': ALBERT,
         'dbert': DBERT,
         'rezero': ReZero,
+        'gpt': GPT,
     }
 
     if isinstance(model, six.string_types):
