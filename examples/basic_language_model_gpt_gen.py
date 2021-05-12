@@ -1,4 +1,6 @@
-
+"""
+GPT闲聊demo，参考：https://github.com/thu-coai/CDial-GPT
+"""
 import numpy as np
 from toolkit4nlp.models import build_transformer_model
 from toolkit4nlp.tokenizers import Tokenizer
