@@ -1,12 +1,16 @@
 #! -*- coding: utf-8 -*-
 """
 torch 权重转 tf1 checkpoints，方便后面用toolkit4nlp加载
-
+torch==1.6.0 + tensorflow==1.15.0 + keras==2.3.1
 本例将DialoGPT权重转为tf版
 """
 
-import tensorflow as tf
+
 import numpy as np
+
+import tensorflow as tf
+import torch
+import keras.backend as K
 
 weights = torch.load('./DialoGPT-small/pytorch_model.bin', map_location='cpu')
 num_hidden_layers = 12
@@ -73,8 +77,6 @@ for i in range(num_hidden_layers):
     tf_weights[name] = b
 
 # save
-import keras.backend as K
-
 out_file = './DialoGPT-small/GPT2_model.ckpt'
 with tf.Graph().as_default():
     pairs = []
