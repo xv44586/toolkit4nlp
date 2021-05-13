@@ -4,6 +4,7 @@
  为了方便自己学习与理解一些东西，实现一些自己的想法
 
 ## Update info:
+  - <strong>2021.5.13</strong> 增加GPT2 及对应的对话生成实验，实验代码：<a href='https://github.com/xv44586/toolkit4nlp/blob/master/examples/basic_language_model_gpt2_gen.py'>basic_language_model_gpt2_gen</a>
   - <strong>2021.5.12</strong> 增加GPT 及对应的对话生成实验，实验代码: <a href='https://github.com/xv44586/toolkit4nlp/blob/master/examples/basic_language_model_gpt_gen.py'>basic_language_model_gpt_gen</a>
   - <strong>2021.5.1</strong> 增加ReZero 及对应的文本分类实验，实验代码: <a href='https://github.com/xv44586/toolkit4nlp/blob/master/examples/classification_tnews_rezero_pretrain_finetuning.py'>tnews_rezero_pretrain_finetuning</a>
   - <strong>2021.3.26</strong> 增加RealFormer（residual attention)及对应的文本分类实验，实验代码: <a href='https://github.com/xv44586/toolkit4nlp/blob/master/examples/classification_tnews_pet_realformer.py'>classification tnews pet realformer</a>
