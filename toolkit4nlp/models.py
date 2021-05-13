@@ -726,6 +726,142 @@ class GPT(LM_Mask, BERT):
         return mapping
 
 
+class GPT2(GPT):
+    """
+    GPT2
+    """
+
+    def get_inputs(self):
+        x = self.apply(layer=Input, shape=(self.sequence_length,), name='Input-Token')
+        return x
+
+    def apply_embeddings(self, inputs):
+        """
+        GPT2的embedding 是token_embedding + position_embedding
+        """
+        x = inputs
+
+        x = self.apply(inputs=x,
+                       layer=Embedding,
+                       input_dim=self.vocab_size,
+                       output_dim=self.embedding_size,
+                       embeddings_initializer=self.initializer,
+                       mask_zero=True,
+                       name='Embedding-Token'
+                       )
+        x = self.apply(inputs=x,
+                       layer=PositionEmbedding,
+                       input_dim=self.max_position,
+                       output_dim=self.embedding_size,
+                       merge_mode='add',
+                       embeddings_initializer=self.initializer,
+                       name='Embedding-Position')
+        if self.embedding_size != self.hidden_size:
+            x = self.apply(inputs=x,
+                           layer=Dense,
+                           units=self.hidden_size,
+                           kernel_initializer=self.initializer,
+                           name='Embedding-Mapping')
+
+        return x
+
+    def apply_transformer_layers(self, inputs, idx):
+        """
+        LN --> Att --> Dropout --> Add --> LN --> FFN --> Dropout --> Add
+        """
+        x = inputs
+        z = self.layer_norm_conds[0]
+
+        attention_name = 'Transformer-%d-MultiHeadSelfAttention' % idx
+        feed_forward_name = 'Transformer-%d-FeedForward' % idx
+
+        attention_bias = self.compute_attention_bias(idx)
+
+        # self-attention
+        x_pre = x
+
+        x = self.apply(inputs=self.simplify([x, z]),
+                       layer=LayerNormalization,
+                       epsilon=1e-5,
+                       conditional=(z is not None),
+                       condition_hidden_units=self.layer_norm_conds[1],
+                       condition_hidden_activation=self.layer_norm_conds[2],
+                       condition_hidden_initializer=self.initializer,
+                       name='%s-Norm' % attention_name,
+                       )
+
+        x = self.apply_attention([x, x, x, attention_bias], attention_name, arguments={'a_bias': True})
+
+        x = self.apply(x,
+                       Dropout,
+                       name='%s-Dropout' % attention_name,
+                       rate=self.dropout_rate)
+
+        x = self.apply([x_pre, x],
+                       Add,
+                       name='%s-Add' % attention_name
+                       )
+
+        # feedforward
+        x_pre = x
+        x = self.apply(inputs=self.simplify([x, z]),
+                       layer=LayerNormalization,
+                       epsilon=1e-5,
+                       conditional=(z is not None),
+                       condition_hidden_units=self.layer_norm_conds[1],
+                       condition_hidden_activation=self.layer_norm_conds[2],
+                       condition_hidden_initializer=self.initializer,
+                       name='%s-Norm' % feed_forward_name)
+        x = self.apply(x,
+                       FeedForward,
+                       name=feed_forward_name,
+                       units=self.intermediate_size,
+                       activation=self.hidden_act,
+                       kernel_initializer=self.initializer
+                       )
+        x = self.apply(x,
+                       Dropout,
+                       name='%s-Dropout' % feed_forward_name,
+                       rate=self.dropout_rate)
+        x = self.apply([x_pre, x],
+                       Add,
+                       name='%s-Add' % feed_forward_name)
+
+        return x
+
+    def apply_task_related(self, inputs):
+        """GPT2做language model时先做了LanyerNormalization + Dropout，然后预测token
+        """
+        x = inputs
+        z = self.layer_norm_conds[0]
+
+        x = self.apply(inputs=self.simplify([x, z]),
+                       layer=LayerNormalization,
+                       epsilon=1e-5,
+                       conditional=(z is not None),
+                       condition_hidden_units=self.layer_norm_conds[1],
+                       condition_hidden_activation=self.layer_norm_conds[2],
+                       condition_hidden_initializer=self.initializer,
+                       name='Output-Norm')
+        x = self.apply(
+            inputs=x,
+            layer=Dropout,
+            rate=self.dropout_rate,
+            name='Output-Dropout'
+        )
+        x = super(GPT2, self).apply_task_related(x)
+        return x
+
+    def variable_mapping(self):
+        mapping = super(GPT2, self).variable_mapping()
+        mapping = {
+            k: [i.replace('output/LayerNorm', 'input/LayerNorm') for i in v]
+            for k, v in mapping.items()
+        }
+        mapping['Output-Norm'] = ['gpt/output/LayerNorm/beta', 'gpt/output/LayerNorm/gamma']
+        return mapping
+
+
 class ELECTRA(BERT):
     @remove_arguments('with_mlm', 'with_pool')
     def __init__(self, max_position, **kwargs):
@@ -1199,13 +1335,13 @@ class ReZero(BERT):
 
 
 class ALBERT(BERT):
-    def apply_transformer_layers(self, inputs, index):
+    def apply_transformer_layers(self, inputs, idx):
         """
         Att -->  Dropout --> Add --> LN --> FFN --> Dropout --> Add --> LN
         """
         attention_name = 'Transformer-MultiHeadSelfAttention'
         feed_forward_name = 'Transformer-FeedForward'
-        attention_bias = self.compute_attention_bias(index)
+        attention_bias = self.compute_attention_bias(idx)
 
         x_pre, x = inputs, [inputs, inputs, inputs]
         z = self.layer_norm_conds[0]
@@ -1323,6 +1459,7 @@ def build_transformer_model(
         'dbert': DBERT,
         'rezero': ReZero,
         'gpt': GPT,
+        'gpt2': GPT2,
     }
 
     if isinstance(model, six.string_types):
