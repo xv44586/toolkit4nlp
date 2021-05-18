@@ -874,6 +874,47 @@ class ConditionalRandomField(Layer):
         return dict(list(base_config.items()) + list(config.items()))
 
 
+class GatherLastToken(Layer):
+    """
+    获取最后一个token对应的output，
+    如果指定pad_token_id，则是最后一个非pad_token对应的output，否则为序列最后一个token对应的output
+    """
+
+    def __init__(self, pad_token_id=None, **kwargs):
+        super(GatherLastToken, self).__init__(**kwargs)
+        self.pad_token_id = pad_token_id
+
+    def call(self, inputs, **kwargs):
+        logits, token_seq = inputs[:2]
+        seq_shape = K.shape(token_seq)
+        batch_size, seq_length = seq_shape[0], seq_shape[1]
+        if self.pad_token_id is None:
+            sequence_lengths = [seq_length - 1] * batch_size
+        else:
+            sequence_lengths = (
+                    K.sum(
+                        K.cast(
+                            K.not_equal(token_seq, self.pad_token_id),
+                            dtype='int32',
+                        ),
+                        -1,
+                        keepdims=False,
+                    )
+                    - 1
+            )
+        # only tf2
+        # return tf.gather(logits, sequence_lengths, batch_dims=1, axis=1)
+
+        indices = K.expand_dims(sequence_lengths, -1)
+        return tf.gather_nd(logits, indices, batch_dims=1)
+
+    def compute_output_shape(self, input_shape):
+        return (input_shape[0][0], input_shape[0][-1])
+
+    def compute_mask(self, inputs, mask=None):
+        return mask[0]
+
+
 class Loss(Layer):
     """
     特殊层，用于编写灵活loss
