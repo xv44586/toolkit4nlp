@@ -862,6 +862,63 @@ class GPT2(GPT):
         return mapping
 
 
+class GPT2ForSequenceClassification(GPT2):
+    """
+    GPT2 做分类任务，模型的改变主要是将lm_head 去掉拼了一个dense 层，同时只使用了最后一个'有效' token 对应的output
+    当label ==1 时，做回归任务，当label > 1 时，为分类任务
+    """
+    def __init__(self, num_labels=1, pad_token_id=None, **kwargs):
+        super(GPT2ForSequenceClassification, self).__init__(**kwargs)
+        self.num_labels = num_labels
+        self.pad_token_id = pad_token_id  # 用来寻找最后一个有效token 的位置，如果不指定，则选最后一个
+        self.final_activation = 'sigmoid' if num_labels == 1 else 'softmax'
+
+    def apply_task_related(self, inputs):
+        """LanyerNormalization --> Dropout  --> GatherLastToken  --> Dense
+        """
+        x = inputs
+        z = self.layer_norm_conds[0]
+
+        x = self.apply(inputs=self.simplify([x, z]),
+                       layer=LayerNormalization,
+                       epsilon=1e-5,
+                       conditional=(z is not None),
+                       condition_hidden_units=self.layer_norm_conds[1],
+                       condition_hidden_activation=self.layer_norm_conds[2],
+                       condition_hidden_initializer=self.initializer,
+                       name='Output-Norm')
+
+        x = self.apply(
+            inputs=x,
+            layer=Dropout,
+            rate=self.dropout_rate,
+            name='Output-Dropout'
+        )
+        # extract last token output
+        x = self.apply(
+            inputs=[x, self.inputs[0]],
+            layer=GatherLastToken,
+            pad_token_id=self.pad_token_id,
+        )
+
+        x = self.apply(
+            inputs=x,
+            layer=Dense,
+            units=self.num_labels,
+            kernel_initializer=self.initializer,
+            use_bias=False,
+            name='Output-Score',
+            activation=self.final_activation
+        )
+
+        return x
+
+    def variable_mapping(self):
+        mapping = super(GPT2ForSequenceClassification, self).variable_mapping()
+        mapping['Output-Score'] = ['gpt/output/score']
+        return mapping
+
+
 class ELECTRA(BERT):
     @remove_arguments('with_mlm', 'with_pool')
     def __init__(self, max_position, **kwargs):
