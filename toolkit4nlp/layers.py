@@ -117,8 +117,9 @@ class MultiHeadAttention(Layer):
             output = output + tf.einsum('bhjk,jkd->bjhd', att, position_embeddings)
         output = K.reshape(output, (-1, K.shape(output)[1], self.output_dim))
         output = self.combine_dense(output)
+
         # query mask
-        output = sequence_masking(output, q_mask, 'mul')
+        # output = sequence_masking(output, q_mask, 'mul')
         if not self.with_residual_attention:
             return output
 
