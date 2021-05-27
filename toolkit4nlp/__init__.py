@@ -4,4 +4,4 @@
 # @Email   : xv44586@gmail.com
 # @File    : __init__.py.py
 
-__version__ = '0.5.2'
+__version__ = '0.6.0'
