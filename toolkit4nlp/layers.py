@@ -928,8 +928,8 @@ class Loss(Layer):
     def compute_loss(self, inputs):
         raise NotImplementedError
 
-    def call(self, inputs, **kwargs):
-        loss = self.compute_loss(inputs)
+    def call(self, inputs, mask=None):
+        loss = self.compute_loss(inputs, mask)
         self.add_loss(loss)
 
         if self.output_idx is None:
@@ -945,6 +945,15 @@ class Loss(Layer):
         if type(self.output_idx) == list:
             return [input_shape[idx] for idx in self.output_idx]
         return input_shape[self.output_idx]
+
+    def compute_mask(self, inputs, mask):
+        if mask is not None:
+            if self.output_idx is None:
+                return mask
+            elif isinstance(self.output_idx, list):
+                return [mask[i] for i in self.output_idx]
+            else:
+                return mask[self.output_idx]
 
     def get_config(self):
         config = {'output_idx': self.output_idx}
