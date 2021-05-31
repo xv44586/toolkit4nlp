@@ -33,7 +33,8 @@ class Transformer(object):
                  prefix=None,  # layer name 的前缀
                  keep_tokens=None,  # 自定义保留token
                  with_residual_attention=False,  # attention scores 残差
-                 skip_weights_from_checkpoints=[],  # 从checkpoints中load weights 跳过的权重，会同时作用在trainable_weights 和 variables
+                 skip_weights_from_checkpoints=[],
+                 # 从checkpoints中load weights 跳过的权重，会同时作用在trainable_weights 和 variables
                  **kwargs):
         """
         """
@@ -287,7 +288,7 @@ class BERT(Transformer):
                  with_pool=False,  # 是否包含pooler部分
                  with_nsp=False,  # 是否包含NSP部分
                  with_mlm=False,  # 是否包含mlm部分
-                 type_vocab_size=2,  # segment type 的种类
+                 segment_vocab_size=2,  # segment type 的种类
                  shared_segment_embeddings=False,  # segment 与 token 是否共用embedding
                  **kwargs
                  ):
@@ -297,22 +298,22 @@ class BERT(Transformer):
         self.with_pool = with_pool
         self.with_nsp = with_nsp
         self.with_mlm = with_mlm
-        self.type_vocab_size = type_vocab_size
-        self.shared_segment_embeddings=shared_segment_embeddings
+        self.segment_vocab_size = segment_vocab_size
+        self.shared_segment_embeddings = shared_segment_embeddings
         # nsp need pooler
         if with_nsp and not with_pool:
             self.with_pool = True
 
     def get_inputs(self):
-        # 新增type_vocab_size，来过滤segment-inputs
+        # 新增segment_vocab_size，来过滤segment-inputs
         token_in = self.apply(layer=Input,
                               name='Input-Token',
                               shape=(self.sequence_length,))
         inputs = [token_in]
-        if self.type_vocab_size > 0:
+        if self.segment_vocab_size > 0:
             segment_in = self.apply(layer=Input,
-                                name='Input-Segment',
-                                shape=(self.sequence_length,))
+                                    name='Input-Segment',
+                                    shape=(self.sequence_length,))
             inputs.append(segment_in)
 
         return inputs
@@ -322,20 +323,20 @@ class BERT(Transformer):
         """
         inputs = inputs[:]
         x = inputs.pop(0)
-        if self.type_vocab_size > 0:
+        if self.segment_vocab_size > 0:
             s = inputs.pop(0)
         # condition layer norm
         z = self.layer_norm_conds[0]
 
         x = self.apply(inputs=x,
-                     layer=Embedding,
-                     name='Embedding-Token',
-                     input_dim=self.vocab_size,
-                     output_dim=self.embedding_size,
-                     embeddings_initializer=self.initializer,
-                     mask_zero=True
-                     )
-        if self.type_vocab_size > 0:
+                       layer=Embedding,
+                       name='Embedding-Token',
+                       input_dim=self.vocab_size,
+                       output_dim=self.embedding_size,
+                       embeddings_initializer=self.initializer,
+                       mask_zero=True
+                       )
+        if self.segment_vocab_size > 0:
             if self.shared_segment_embeddings:
                 name = 'Embedding-Token'
             else:
@@ -343,10 +344,10 @@ class BERT(Transformer):
             s = self.apply(s,
                            Embedding,
                            name=name,
-                           input_dim=self.type_vocab_size,
+                           input_dim=self.segment_vocab_size,
                            output_dim=self.embedding_size,
                            embeddings_initializer=self.initializer,
-                                           )
+                           )
             x = self.apply([x, s], Add, name='Embedding-Token-Segment')
         x = self.apply(x,
                        PositionEmbedding,
@@ -508,6 +509,11 @@ class BERT(Transformer):
         elif name in ['bert/embeddings/word_embeddings',
                       'cls/predictions/output_bias', ]:
             return self.load_embeddings(variable)
+        # 与pretrained segment vocab size不同时，复制pretrained weights来初始化
+        elif name == 'bert/embeddings/token_type_embeddings' and variable.shape[0] != self.segment_vocab_size:
+            v = np.repeat([variable], self.segment_vocab_size, axis=0)
+            v = np.reshape(v, (variable.shape[0] * self.segment_vocab_size, variable.shape[1]))
+            return v[:self.segment_vocab_size]
         else:
             return variable
 
@@ -637,6 +643,7 @@ class GPT(LM_Mask, BERT):
     """
     OPENAI GPT
     """
+
     @insert_arguments(final_activation='softmax')
     @remove_arguments('with_pool', 'with_mlm', 'with_nsp')
     def __init__(self, **kwargs):
@@ -648,19 +655,19 @@ class GPT(LM_Mask, BERT):
         """
         inputs = inputs[:]
         x = inputs.pop(0)
-        if self.type_vocab_size > 0:
+        if self.segment_vocab_size > 0:
             s = inputs.pop(0)
 
         x = self.apply(inputs=x,
-                     layer=Embedding,
-                     name='Embedding-Token',
-                     input_dim=self.vocab_size,
-                     output_dim=self.embedding_size,
-                     embeddings_initializer=self.initializer,
-                     mask_zero=True
-                     )
+                       layer=Embedding,
+                       name='Embedding-Token',
+                       input_dim=self.vocab_size,
+                       output_dim=self.embedding_size,
+                       embeddings_initializer=self.initializer,
+                       mask_zero=True
+                       )
 
-        if self.type_vocab_size > 0:
+        if self.segment_vocab_size > 0:
             if self.shared_segment_embeddings:
                 name = 'Embedding-Token'
             else:
@@ -669,7 +676,7 @@ class GPT(LM_Mask, BERT):
             s = self.apply(s,
                            Embedding,
                            name=name,
-                           input_dim=self.type_vocab_size,
+                           input_dim=self.segment_vocab_size,
                            output_dim=self.embedding_size,
                            embeddings_initializer=self.initializer,
                            )
@@ -721,7 +728,7 @@ class GPT(LM_Mask, BERT):
     def variable_mapping(self):
         mapping = super(GPT, self).variable_mapping()
         mapping = {
-            k: [i.replace('bert/','gpt/').replace('encoder', 'transformer') for i in v] for k, v in mapping.items()
+            k: [i.replace('bert/', 'gpt/').replace('encoder', 'transformer') for i in v] for k, v in mapping.items()
         }
         return mapping
 
@@ -867,6 +874,7 @@ class GPT2ForSequenceClassification(GPT2):
     GPT2 做分类任务，模型的改变主要是将lm_head 去掉拼了一个dense 层，同时只使用了最后一个'有效' token 对应的output
     当label ==1 时，做回归任务，当label > 1 时，为分类任务
     """
+
     def __init__(self, num_labels=1, pad_token_id=None, **kwargs):
         super(GPT2ForSequenceClassification, self).__init__(**kwargs)
         self.num_labels = num_labels
@@ -1251,7 +1259,7 @@ class ReZero(BERT):
         segment_embedding = self.apply(s,
                                        Embedding,
                                        name='Embedding-Segment',
-                                       input_dim=self.type_vocab_size,
+                                       input_dim=self.segment_vocab_size,
                                        output_dim=self.embedding_size,
                                        embeddings_initializer=self.initializer,
                                        )
