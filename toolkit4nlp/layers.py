@@ -990,6 +990,7 @@ custom_objects = {
     'Loss': Loss,
     'RelativePositionEmbedding': RelativePositionEmbedding,
     'ReWeight': ReWeight,
+    'GatherLastToken': GatherLastToken,
 }
 
 keras.utils.get_custom_objects().update(custom_objects)
