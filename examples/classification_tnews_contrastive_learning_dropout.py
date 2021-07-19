@@ -90,17 +90,18 @@ class TotalLoss(Loss):
 
     def compute_loss_of_classification(self, inputs, mask=None):
         _, _, y_true, _, y_pred = inputs
-        loss = K.sparse_categorical_crossentropy(y_true, y_pred)
+        loss = K.sparse_categorical_crossentropy(y_true, y_pred, from_logits=True)
         self.add_metric(loss, 'cls_loss')
         return loss
 
     def compute_loss_of_similarity(self, inputs, mask=None):
-        _, _, _, y_pred, _ = inputs
+        # _, _, _, y_pred, _ = inputs
+        _, _, _, _, y_pred = inputs  # use last layer's logits
         y_true = self.get_labels_of_similarity(y_pred)  # 构建标签
         y_pred = K.l2_normalize(y_pred, axis=1)  # 句向量归一化
         similarities = K.dot(y_pred, K.transpose(y_pred))  # 相似度矩阵
         similarities = similarities - K.eye(K.shape(y_pred)[0]) * 1e12  # 排除对角线
-        similarities = similarities * 30  # scale
+        similarities = similarities * 20  # scale
         loss = K.categorical_crossentropy(
             y_true, similarities, from_logits=True
         )
@@ -133,7 +134,7 @@ label_inputs = Input(shape=(None,), name='label_inputs')
 
 pooler = Lambda(lambda x: x[:, 0])(bert.output)
 x = Dense(units=num_classes, activation='softmax', name='classifier')(pooler)
-output = TotalLoss(0)(bert.inputs + [label_inputs, pooler, x])
+output = TotalLoss(4)(bert.inputs + [label_inputs, pooler, x])
 
 model = Model(bert.inputs + [label_inputs], output)
 classifier = Model(bert.inputs, x)
