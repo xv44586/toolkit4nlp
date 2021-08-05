@@ -6,7 +6,7 @@
    
 ## 2. tf-serving
 tf-serving 具有热更新，支持多模型多版本，异步调用，高可用等特性，所以也推荐使用tf-serving。使用了tf-serving后，完整的路线变为：
-   ** client --> backend --> rpc/rest --> tf-serving **
+   **client --> backend --> rpc/rest --> tf-serving**
 
 ### tf-serving 安装
 tf-serving的安装推荐docker 通过镜像安装，手动安装比较麻烦，安装参考：[tf serving with docker](https://tensorflow.google.cn/tfx/serving/docker?hl=zh-cn)
@@ -32,11 +32,13 @@ curl -d '{"instances": [1.0, 2.0, 5.0]}' \
 # Returns => { "predictions": [2.5, 3.0, 4.5] }
 ```
 
-不过推荐用配置文件启动，如果走grpc，还需要暴露8500 端口
+不过推荐用配置文件启动，如果走grpc，还需要暴露8500 端口.
+**启动命令**
 ```shell
 docker run -t --rm -p 8501:8501 -p 8500:8500 -v "D:/Docker/models:/models" tensorflow/serving --model_config_file=/models/models.config
 ```
 
+**模型config file**
 ```editorconfig
 model_config_list {
   config {
@@ -63,11 +65,11 @@ with tf.keras.backend.get_session() as sess:
 ```
 对于其他框架的模型，也有对应的方案，如onnx做为中介。
 需要注意的是，保存时的inputs/outputs的定义，在调用模型时需要保持一致，如果忘记了保存时如何写的，有两种方式查看：
-1.通过tensorflow提供的工具：
+1.通过tensorflow提供的工具：  
 ```shell
 saved_model_cli show --dir ./bert --all
 ```
-2. 通过tf-serving 暴露的服务接口:
+2. 通过tf-serving 暴露的服务接口:  
 ```shell
 curl http://localhost:8501/v1/models/bert/metadata
 ```
