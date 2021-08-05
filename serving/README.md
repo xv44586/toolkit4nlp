@@ -32,18 +32,18 @@ curl -d '{"instances": [1.0, 2.0, 5.0]}' \
 # Returns => { "predictions": [2.5, 3.0, 4.5] }
 ```
 
-不过推荐用配置文件启动，如果走grpc，还需要暴露8500 端口.
+不过推荐用配置文件启动，如果走grpc，还需要暴露8500 端口.  
 **启动命令**
 ```shell
-docker run -t --rm -p 8501:8501 -p 8500:8500 -v "D:/Docker/models:/models" tensorflow/serving --model_config_file=/models/models.config
+docker run -t --rm -p 8501:8501 -p 8500:8500 -v "/data/Docker/models:/models" tensorflow/serving --model_config_file=/models/models.config
 ```
 
 **模型config file**
 ```editorconfig
 model_config_list {
   config {
-    name: 'model_name'
-    base_path: '/path/to/model'
+    name: 'bert'
+    base_path: '/models/bert'
     model_platform: 'tensorflow'
   }
 }
@@ -75,4 +75,6 @@ curl http://localhost:8501/v1/models/bert/metadata
 ```
 
 ### backend
-两种方式调用tf-serving api，restful-api 和 grpc-api，可以参考[restful test](https://github.com/xv44586/toolkit4nlp/blob/master/serving/restful_test.py) 和[grpc test](https://github.com/xv44586/toolkit4nlp/blob/master/serving/grpc_test.py)
+两种方式调用tf-serving api，restful-api 和 grpc-api，可以参考[restful test](https://github.com/xv44586/toolkit4nlp/blob/master/serving/restful_test.py) 和[grpc test](https://github.com/xv44586/toolkit4nlp/blob/master/serving/grpc_test.py)  
+
+grpc的方式比restful 会快一点点，不过在输入数据不大的情况下，优势不明显，推荐直接使用restful 接口。
