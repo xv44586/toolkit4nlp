@@ -16,7 +16,7 @@ from sanic.request import Request
 
 
 # config
-vocab = 'D:/pretrain/chinese_L-12_H-768_A-12/vocab.txt'
+vocab = '/data/pretrain/chinese_L-12_H-768_A-12/vocab.txt'
 tokenizer = Tokenizer(vocab, do_lower_case=True)
 url = 'http://localhost:8501/v1/models/bert/versions/1:predict'  # model url
 

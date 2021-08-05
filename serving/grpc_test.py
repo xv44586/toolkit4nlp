@@ -20,7 +20,7 @@ from sanic.request import Request
 from toolkit4nlp.tokenizers import Tokenizer
 
 # config
-vocab = 'D:/pretrain/chinese_L-12_H-768_A-12/vocab.txt'
+vocab = '/data/pretrain/chinese_L-12_H-768_A-12/vocab.txt'
 tokenizer = Tokenizer(vocab, do_lower_case=True)
 server = '127.0.0.1:8500'  # grpc api
 channel = grpc.insecure_channel(server)
@@ -90,7 +90,7 @@ def test(request: Request):
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port='8866', debug=False)
+    app.run(host='0.0.0.0', port='8864', debug=False)
 
     # 现在打开浏览器输入 http://localhost:8864/test?sentence=科学技术是第一生产力&idx=2&idx=3
     # 或者 http://localhost:8864/test_async?sentence=科学技术是第一生产力&idx=2&idx=3，可以看到对应的结果：技术
