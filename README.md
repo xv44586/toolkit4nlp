@@ -4,6 +4,7 @@
  为了方便自己学习与理解一些东西，实现一些自己的想法
 
 ## Update info:
+  - <strong>2021.8.5</strong> 增加serving 相关代码，线上deploy 时可以参考，对应代码：<a href='https://github.com/xv44586/toolkit4nlp/blob/master/serving'>serving</a>
   - <strong>2021.8.4</strong> 增加混合精度训练实验，实验代码 : <a href='https://github.com/xv44586/toolkit4nlp/blob/master/examples/classification_tnews_mixed_precision.py'>classification_tnews_mixed_precision</a>
   - <strong>2021.5.13</strong> 增加GPT2 及对应的对话生成实验，实验代码：<a href='https://github.com/xv44586/toolkit4nlp/blob/master/examples/basic_language_model_gpt2_gen.py'>basic_language_model_gpt2_gen</a>
   - <strong>2021.5.12</strong> 增加GPT 及对应的对话生成实验，实验代码: <a href='https://github.com/xv44586/toolkit4nlp/blob/master/examples/basic_language_model_gpt_gen.py'>basic_language_model_gpt_gen</a>
