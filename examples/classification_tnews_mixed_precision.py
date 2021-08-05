@@ -8,6 +8,8 @@
 best acc: 0.576
 tips: 1.只支持tf.train.Optimizer or tf.keras.optimizers.Optimizer继承来的，不支持keras 原生的optimizer
     2. 修改opt 放在build model 前，否则某些情况会报错
+
+训练速度能提高约30% 左右，244ms/step -> 168ms/step
 """
 import os
 os.environ['TF_KERAS'] = '1'  # 使用tf.keras
