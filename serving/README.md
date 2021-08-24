@@ -35,7 +35,7 @@ curl -d '{"instances": [1.0, 2.0, 5.0]}' \
 不过推荐用配置文件启动，如果走grpc，还需要暴露8500 端口.  
 **启动命令**
 ```shell
-docker run -t --rm -p 8501:8501 -p 8500:8500 -v "/data/Docker/models:/models" tensorflow/serving --model_config_file=/models/models.config
+docker run -t --rm --runtime=nvidia -p 8501:8501 -p 8500:8500 -v "/data/Docker/models:/models" tensorflow/serving:latest-gpu --model_config_file=/models/models.config
 ```
 
 **模型config file**
@@ -74,6 +74,14 @@ saved_model_cli show --dir ./bert --all
 curl http://localhost:8501/v1/models/bert/metadata
 ```
 
+### tensorRT
+```shell
+docker run --rm --runtime=nvidia -it \
+-v /data/Docker/models:/models tensorflow/tensorflow:1.15.5-gpu \
+/usr/local/bin/saved_model_cli convert \
+ --dir /models/bert/01 --output_dir /model/bert_trt/01 --tag_set serve \
+ tensorrt --precision_mode FP32 --max_batch_size 1 --is_dynamic_op True
+```
 ### backend
 两种方式调用tf-serving api，restful-api 和 grpc-api，可以参考[restful test](https://github.com/xv44586/toolkit4nlp/blob/master/serving/restful_test.py) 和[grpc test](https://github.com/xv44586/toolkit4nlp/blob/master/serving/grpc_test.py)  
 
