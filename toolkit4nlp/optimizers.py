@@ -20,8 +20,8 @@ class Adam(keras.optimizers.Optimizer):
     m_t = beta_1 * m_t-1 + (1 - beta_1) * g_t
     v_t = beta_2 * v_t-1 + (1 - beta_2) * g_t**2
     由于更新前期梯度较小，容易朝着0方向走，所以通常加一个bias correct来校正方向
-    m_t_hat = m_t / (1 + beta_1**t)
-    v_t_hat = v_t / (1 + beta_2 ** t)
+    m_t_hat = m_t / (1 - beta_1**t)
+    v_t_hat = v_t / (1 - beta_2 ** t)
 
     ref:
     - [zhihu-zhuanlan](
@@ -71,8 +71,8 @@ class Adam(keras.optimizers.Optimizer):
         #
         with tf.control_dependencies([m_t, v_t]):
             if self.bias_correct:
-                m_t = m_t / (1 + beta_1_power)
-                v_t = v_t / (1 + beta_2_power)
+                m_t = m_t / (1 - beta_1_power)
+                v_t = v_t / (1 - beta_2_power)
             var_t = var - lr_t * m_t / (K.sqrt(v_t) + self.epsilon)
             return K.update(var, var_t)
 
